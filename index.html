@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamShop Demo — Netflix Live Commerce Overlay</title>
+<meta name="description" content="StreamShop demo: see how product cards appear during a live Netflix stream, enabling one-click purchases without leaving the content.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23E50914'/><stop offset='1' stop-color='%23ff4d58'/></linearGradient></defs><rect width='32' height='32' rx='7' fill='url(%23g)'/><polygon points='12,8 12,24 24,16' fill='white'/><path d='M20 20l4 6h-5l-2.5-3.5L14 26H9l4-6' fill='white' opacity='.85'/></svg>">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body { background: #000; font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif; cursor: default; }
+  .wrapper { width: 100%; height: 100%; }
+
+  /* Netflix controls */
+  .nf-player { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; }
+  .nf-controls { position: absolute; bottom: 0; left: 0; right: 0; z-index: 30; opacity: 0; transition: opacity .3s; }
+  .nf-player:hover .nf-controls, .nf-controls.show { opacity: 1; }
+  .nf-gradient { position: absolute; bottom: 0; left: 0; right: 0; height: 200px; background: linear-gradient(transparent, rgba(0,0,0,.7) 60%, rgba(0,0,0,.9)); pointer-events: none; }
+  .nf-scrubber { position: relative; height: 6px; margin: 0 16px; cursor: pointer; }
+  .nf-scrubber-track { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,.2); border-radius: 2px; transition: height .1s; }
+  .nf-scrubber:hover .nf-scrubber-track { height: 6px; }
+  .nf-scrubber-fill { height: 100%; background: #E50914; border-radius: 2px; width: 0%; transition: width .3s linear; position: relative; }
+  .nf-scrubber-knob { position: absolute; right: -6px; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; background: #E50914; border-radius: 50%; opacity: 0; transition: opacity .1s; }
+  .nf-scrubber:hover .nf-scrubber-knob { opacity: 1; }
+  .nf-bar { display: flex; align-items: center; padding: 8px 16px 16px; gap: 4px; }
+  .nf-bar-left { display: flex; align-items: center; gap: 4px; }
+  .nf-bar-center { flex: 1; display: flex; justify-content: center; }
+  .nf-bar-right { display: flex; align-items: center; gap: 4px; }
+  .nf-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; transition: background .15s; color: #fff; }
+  .nf-btn:hover { background: rgba(255,255,255,.1); }
+  .nf-btn svg { width: 24px; height: 24px; fill: #fff; }
+  .nf-volume-wrap { display: flex; align-items: center; position: relative; }
+  .nf-volume-slider-wrap { width: 0; overflow: hidden; transition: width .2s; display: flex; align-items: center; }
+  .nf-volume-wrap:hover .nf-volume-slider-wrap { width: 80px; }
+  .nf-volume-slider { -webkit-appearance: none; appearance: none; width: 70px; height: 3px; background: rgba(255,255,255,.3); border-radius: 2px; outline: none; margin: 0 8px 0 0; cursor: pointer; }
+  .nf-volume-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #fff; border-radius: 50%; cursor: pointer; }
+  .nf-title-bar { position: absolute; top: 0; left: 0; right: 0; padding: 20px 24px; z-index: 30; opacity: 0; transition: opacity .3s; background: linear-gradient(rgba(0,0,0,.7), transparent); display: flex; align-items: center; gap: 12px; }
+  .nf-player:hover .nf-title-bar { opacity: 1; }
+  .nf-episode-title { font-size: 18px; font-weight: 700; color: #fff; }
+  .nf-episode-sub { font-size: 14px; color: rgba(255,255,255,.6); }
+  .nf-time { font-size: 13px; color: rgba(255,255,255,.7); font-variant-numeric: tabular-nums; min-width: 40px; padding: 0 4px; }
+  .nf-live-badge { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .nf-live-dot { width: 8px; height: 8px; background: #E50914; border-radius: 50%; animation: livePulse 1.5s ease-in-out infinite; }
+  .nf-live-text { font-size: 12px; font-weight: 700; color: #fff; letter-spacing: .05em; }
+  .nf-big-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 25; opacity: 0; transition: opacity .15s; pointer-events: none; }
+  .nf-big-play.show { opacity: 1; }
+  .nf-big-play svg { width: 60px; height: 60px; fill: #fff; filter: drop-shadow(0 2px 12px rgba(0,0,0,.6)); }
+  .nf-n-logo { font-size: 26px; font-weight: 900; color: #E50914; line-height: 1; }
+
+  /* Product card — Netflix style */
+  .nf-card { position: absolute; right: 16px; bottom: 90px; width: clamp(220px, 22vw, 300px); background: #2b2b2b; border-radius: 6px; z-index: 35; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,.6); transform: translateY(20px); opacity: 0; pointer-events: none; transition: transform .4s cubic-bezier(.22,1,.36,1), opacity .4s; }
+  .nf-card.visible { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  .nf-card-img-wrap { position: relative; width: 100%; aspect-ratio: 4/3; background: #3a3a3a; overflow: hidden; }
+  .nf-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .nf-card-badge { position: absolute; top: 8px; left: 8px; font-size: 9px; font-weight: 700; letter-spacing: .08em; color: #fff; background: #E50914; padding: 3px 8px; border-radius: 3px; }
+  .nf-card-body { padding: 12px 14px 10px; }
+  .nf-card-name { font-size: 15px; font-weight: 700; color: #fff; line-height: 1.3; margin-bottom: 3px; }
+  .nf-card-desc { font-size: 12px; color: #999; line-height: 1.3; margin-bottom: 10px; }
+  .nf-card-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .nf-card-price { font-size: 18px; font-weight: 800; color: #fff; }
+  .nf-card-official { font-size: 10px; font-weight: 600; color: #46d369; }
+  .nf-card-buy { width: 100%; padding: 10px; background: #E50914; color: #fff; font-size: 13px; font-weight: 700; border: none; border-radius: 4px; text-align: center; cursor: pointer; transition: background .15s; }
+  .nf-card-buy:hover { background: #f40612; }
+  .nf-card-dismiss { text-align: center; margin-top: 6px; font-size: 11px; color: #666; cursor: pointer; padding: 4px; }
+  .nf-card-dismiss:hover { color: #999; }
+
+  @keyframes livePulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ===== SHOP DRAWER ===== */
+  .shop-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 50; opacity: 0; pointer-events: none; transition: opacity .3s; }
+  .shop-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .shop-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: clamp(340px, 30vw, 420px); background: #181818; z-index: 51; transform: translateX(100%); transition: transform .35s cubic-bezier(.22,1,.36,1); display: flex; flex-direction: column; overflow-y: auto; box-shadow: -4px 0 30px rgba(0,0,0,.6); }
+  .shop-drawer.open { transform: translateX(0); }
+
+  .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #2a2a2a; flex-shrink: 0; }
+  .drawer-header h2 { font-size: 16px; font-weight: 700; color: #fff; }
+  .drawer-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; transition: background .15s; color: #fff; background: none; border: none; font-size: 20px; }
+  .drawer-close:hover { background: rgba(255,255,255,.1); }
+
+  /* Product section */
+  .drawer-product { padding: 20px; }
+  .drawer-img-carousel { position: relative; width: 100%; aspect-ratio: 1/1; background: #2a2a2a; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+  .drawer-img-carousel img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .drawer-product-name { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .drawer-product-desc { font-size: 13px; color: #999; margin-bottom: 12px; line-height: 1.4; }
+  .drawer-product-price { font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 20px; }
+  .drawer-official-badge { display: inline-block; font-size: 11px; font-weight: 600; color: #46d369; margin-left: 8px; vertical-align: middle; }
+
+  /* Size selector */
+  .drawer-option-label { font-size: 12px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+  .drawer-sizes { display: flex; gap: 8px; margin-bottom: 20px; }
+  .size-btn { padding: 8px 16px; background: #2a2a2a; color: #fff; border: 2px solid #3a3a3a; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .size-btn:hover { border-color: #666; }
+  .size-btn.selected { border-color: #E50914; background: rgba(229,9,20,.15); color: #fff; }
+
+  /* Quantity */
+  .drawer-qty { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .qty-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; color: #fff; font-size: 18px; cursor: pointer; transition: background .15s; user-select: none; }
+  .qty-btn:hover { background: #3a3a3a; }
+  .qty-val { font-size: 16px; font-weight: 700; color: #fff; min-width: 20px; text-align: center; }
+
+  /* Add to bag CTA */
+  .drawer-add-btn { width: 100%; padding: 14px; background: #E50914; color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; transition: background .15s, transform .1s; }
+  .drawer-add-btn:hover { background: #f40612; }
+  .drawer-add-btn:active { transform: scale(.98); }
+
+  /* ===== CHECKOUT VIEW ===== */
+  .drawer-checkout { padding: 20px; display: none; }
+  .drawer-checkout.active { display: block; }
+  .checkout-summary { display: flex; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid #2a2a2a; margin-bottom: 20px; }
+  .checkout-summary img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; background: #2a2a2a; }
+  .checkout-summary-info { flex: 1; }
+  .checkout-summary-name { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .checkout-summary-meta { font-size: 12px; color: #999; margin-bottom: 6px; }
+  .checkout-summary-price { font-size: 16px; font-weight: 800; color: #fff; }
+
+  .checkout-section { margin-bottom: 20px; }
+  .checkout-section-title { font-size: 12px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+  .checkout-card { display: flex; align-items: center; gap: 12px; background: #2a2a2a; padding: 12px 16px; border-radius: 8px; }
+  .checkout-card-icon { font-size: 24px; }
+  .checkout-card-info { flex: 1; }
+  .checkout-card-label { font-size: 13px; color: #fff; font-weight: 600; }
+  .checkout-card-sub { font-size: 11px; color: #999; }
+  .checkout-card-check { color: #46d369; font-size: 16px; }
+
+  .checkout-input { width: 100%; padding: 10px 14px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; color: #fff; font-size: 13px; font-family: inherit; margin-bottom: 8px; outline: none; transition: border-color .15s; }
+  .checkout-input:focus { border-color: #666; }
+  .checkout-input::placeholder { color: #666; }
+  .checkout-row { display: flex; gap: 8px; }
+  .checkout-row .checkout-input { flex: 1; }
+
+  .checkout-buy-btn { width: 100%; padding: 14px; background: #E50914; color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; transition: background .15s, transform .1s; margin-top: 8px; }
+  .checkout-buy-btn:hover { background: #f40612; }
+  .checkout-buy-btn:active { transform: scale(.98); }
+
+  /* ===== CONFIRMATION VIEW ===== */
+  .drawer-confirm { padding: 20px; display: none; align-items: center; justify-content: center; flex-direction: column; flex: 1; min-height: 300px; }
+  .drawer-confirm.active { display: flex; }
+
+  .confirm-check { width: 80px; height: 80px; border-radius: 50%; background: #46d369; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; animation: confirmPop .4s cubic-bezier(.22,1,.36,1); }
+  .confirm-check svg { width: 40px; height: 40px; fill: #fff; }
+  .confirm-title { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .confirm-sub { font-size: 13px; color: #999; text-align: center; line-height: 1.4; }
+
+  @keyframes confirmPop { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+  /* Loading spinner */
+  .checkout-spinner { width: 40px; height: 40px; border: 3px solid #333; border-top-color: #E50914; border-radius: 50%; animation: spin .6s linear infinite; margin-bottom: 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== PRODUCT LIST (Netflix Season/Episodes Style) ===== */
+  .shop-list-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 40; opacity: 0; pointer-events: none; transition: opacity .3s; }
+  .shop-list-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .shop-list { position: absolute; top: 0; right: 0; bottom: 0; width: clamp(400px, 40vw, 560px); background: #1a1a1a; z-index: 41; transform: translateX(100%); transition: transform .4s cubic-bezier(.22,1,.36,1); display: flex; flex-direction: column; overflow-y: auto; box-shadow: -4px 0 30px rgba(0,0,0,.7); }
+  .shop-list.open { transform: translateX(0); }
+
+  .shop-list-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid #2e2e2e; flex-shrink: 0; background: #222; }
+  .shop-list-header h2 { font-size: 20px; font-weight: 700; color: #fff; }
+  .shop-list-close { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; border: none; background: none; color: #fff; font-size: 22px; transition: background .15s; }
+  .shop-list-close:hover { background: rgba(255,255,255,.1); }
+
+  /* Product item — collapsed */
+  .pl-item { border-bottom: 1px solid #2e2e2e; cursor: pointer; transition: background .15s; }
+  .pl-item:hover { background: rgba(255,255,255,.04); }
+
+  .pl-row { display: flex; align-items: center; padding: 20px 24px; gap: 18px; }
+  .pl-number { width: 36px; flex-shrink: 0; font-size: 18px; font-weight: 700; color: #f2f2f2; }
+  .pl-info { flex: 1; min-width: 0; }
+  .pl-name { font-size: 17px; font-weight: 700; color: #f5f5f5; line-height: 1.2; }
+  .pl-price-small { font-size: 13px; color: #999; margin-top: 2px; }
+  .pl-chevron { width: 24px; height: 24px; flex-shrink: 0; fill: #999; transition: transform .25s; }
+  .pl-item.expanded .pl-chevron { transform: rotate(180deg); }
+
+  /* Product item — expanded detail */
+  .pl-detail { max-height: 0; overflow: hidden; transition: max-height .35s cubic-bezier(.22,1,.36,1); background: #0f0f0f; }
+  .pl-item.expanded .pl-detail { max-height: 500px; }
+
+  .pl-detail-inner { display: flex; gap: 24px; padding: 4px 24px 24px; align-items: flex-start; }
+  .pl-thumb { width: 200px; aspect-ratio: 1/1; object-fit: cover; flex-shrink: 0; background: #2a2a2a; border-radius: 6px; }
+  .pl-detail-content { flex: 1; min-width: 0; padding-top: 2px; }
+  .pl-desc { font-size: 14px; line-height: 1.5; color: #bbb; margin-bottom: 14px; }
+  .pl-price-big { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .pl-official { font-size: 11px; color: #46d369; font-weight: 600; margin-bottom: 16px; }
+  .pl-buy-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #E50914; color: #fff; font-size: 14px; font-weight: 700; border: none; border-radius: 4px; cursor: pointer; transition: background .15s; }
+  .pl-buy-btn:hover { background: #f40612; }
+  .pl-buy-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+  /* Shop button in control bar */
+  .nf-shop-btn { position: relative; }
+  .nf-shop-btn .nf-shop-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background: #E50914; border-radius: 50%; animation: livePulse 1.5s ease-in-out infinite; }
+
+  /* Mobile responsive */
+  @media (max-width: 600px) {
+    .shop-drawer { width: 100%; }
+    .shop-list { width: 100%; }
+    .nf-card { right: 8px; bottom: 80px; width: clamp(180px, 55vw, 260px); }
+    .pl-detail-inner { flex-direction: column; }
+    .pl-thumb { width: 100%; }
+    .pl-row { padding: 16px 16px; }
+    .pl-detail-inner { padding: 4px 16px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+  <div class="nf-player" id="player">
+
+    <!-- Video background -->
+    <div id="stage" style="position:absolute;inset:0;overflow:hidden;background:#000">
+      <div id="ytContainer" style="position:absolute;top:50%;left:50%;width:180%;height:180%;transform:translate(-50%,-50%);pointer-events:none"></div>
+    </div>
+
+    <!-- Big play/pause indicator -->
+    <div class="nf-big-play" id="bigPlay">
+      <svg id="bigPlayIcon" viewBox="0 0 24 24"><path d="M6 4l15 8-15 8V4z"/></svg>
+    </div>
+
+    <!-- Netflix top bar -->
+    <div class="nf-title-bar">
+      <div class="nf-n-logo">N</div>
+      <div>
+        <div class="nf-episode-title">BTS: THE COMEBACK LIVE</div>
+        <div class="nf-episode-sub" id="songInfo">Dynamite</div>
+      </div>
+      <div class="nf-live-badge">
+        <div class="nf-live-dot"></div>
+        <div class="nf-live-text">LIVE</div>
+      </div>
+    </div>
+
+    <!-- Product card overlay (Netflix style) -->
+    <div id="productCard" class="nf-card">
+      <div class="nf-card-img-wrap">
+        <img id="cardImg" class="nf-card-img" src="https://cdn-contents.weverseshop.io/public/shop/2c24d6dc2dda4ab6ceaef14b53985a03.png?w=720&q=95" alt="Product">
+        <div class="nf-card-badge">SHOP THIS MOMENT</div>
+      </div>
+      <div class="nf-card-body">
+        <div class="nf-card-name" id="cardName">BTS LIGHT STICK VER.4</div>
+        <div class="nf-card-desc" id="cardDesc">Syncs with concert in real-time</div>
+        <div class="nf-card-row">
+          <span class="nf-card-price" id="cardPrice">$35.05</span>
+          <span class="nf-card-official">&#10003; Official</span>
+        </div>
+        <div class="nf-card-buy" id="buyBtn">Buy Now &#8594;</div>
+        <div class="nf-card-dismiss" id="dismissBtn">Dismiss</div>
+      </div>
+    </div>
+
+    <!-- Product List (Netflix Season Style) -->
+    <div class="shop-list-overlay" id="shopListOverlay"></div>
+    <div class="shop-list" id="shopList">
+      <div class="shop-list-header">
+        <h2>Available Products</h2>
+        <button class="shop-list-close" id="shopListClose">&times;</button>
+      </div>
+      <div id="shopListItems"></div>
+    </div>
+
+    <!-- Shop Drawer Overlay -->
+    <div class="shop-overlay" id="shopOverlay"></div>
+
+    <!-- Shop Drawer -->
+    <div class="shop-drawer" id="shopDrawer">
+      <div class="drawer-header">
+        <h2 id="drawerTitle">Quick View</h2>
+        <button class="drawer-close" id="drawerClose">&times;</button>
+      </div>
+
+      <!-- PRODUCT VIEW -->
+      <div class="drawer-product" id="drawerProduct">
+        <div class="drawer-img-carousel">
+          <img id="drawerImg" src="" alt="Product">
+        </div>
+        <div class="drawer-product-name" id="drawerName"></div>
+        <div class="drawer-product-desc" id="drawerDesc">Premium quality official merchandise. Limited edition, exclusively available during this live event.</div>
+        <div>
+          <span class="drawer-product-price" id="drawerPrice"></span>
+          <span class="drawer-official-badge">&#10003; Official BTS Merch</span>
+        </div>
+
+        <div style="margin-top:20px">
+          <div class="drawer-option-label">Size</div>
+          <div class="drawer-sizes" id="drawerSizes">
+            <div class="size-btn" data-size="S">S</div>
+            <div class="size-btn" data-size="M">M</div>
+            <div class="size-btn selected" data-size="L">L</div>
+            <div class="size-btn" data-size="XL">XL</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="drawer-option-label">Quantity</div>
+          <div class="drawer-qty">
+            <div class="qty-btn" id="qtyMinus">&#8722;</div>
+            <div class="qty-val" id="qtyVal">1</div>
+            <div class="qty-btn" id="qtyPlus">&#43;</div>
+          </div>
+        </div>
+
+        <button class="drawer-add-btn" id="addToBagBtn">Add to Bag</button>
+      </div>
+
+      <!-- CHECKOUT VIEW -->
+      <div class="drawer-checkout" id="drawerCheckout">
+        <div class="checkout-summary">
+          <img id="checkoutImg" src="" alt="">
+          <div class="checkout-summary-info">
+            <div class="checkout-summary-name" id="checkoutName"></div>
+            <div class="checkout-summary-meta" id="checkoutMeta">Size: L &middot; Qty: 1</div>
+            <div class="checkout-summary-price" id="checkoutPrice"></div>
+          </div>
+        </div>
+
+        <div class="checkout-section">
+          <div class="checkout-section-title">Payment</div>
+          <div class="checkout-card">
+            <div class="checkout-card-icon">💳</div>
+            <div class="checkout-card-info">
+              <div class="checkout-card-label">Visa &bull;&bull;&bull;&bull; 4242</div>
+              <div class="checkout-card-sub">Netflix subscription card</div>
+            </div>
+            <div class="checkout-card-check">&#10003;</div>
+          </div>
+        </div>
+
+        <div class="checkout-section">
+          <div class="checkout-section-title">Shipping Address</div>
+          <input class="checkout-input" id="shippingName" placeholder="Full name" value="Kim Namjoon">
+          <input class="checkout-input" id="shippingAddr" placeholder="Address" value="42 Hannam-daero, Yongsan-gu">
+          <div class="checkout-row">
+            <input class="checkout-input" id="shippingCity" placeholder="City" value="Seoul">
+            <input class="checkout-input" id="shippingZip" placeholder="Zip" value="04410">
+          </div>
+          <input class="checkout-input" id="shippingCountry" placeholder="Country" value="South Korea">
+        </div>
+
+        <button class="checkout-buy-btn" id="checkoutBuyBtn">Buy Now</button>
+      </div>
+
+      <!-- CONFIRMATION VIEW -->
+      <div class="drawer-confirm" id="drawerConfirm"></div>
+    </div>
+
+    <!-- Netflix bottom controls -->
+    <div class="nf-controls" id="controls">
+      <div class="nf-gradient"></div>
+      <div style="position:relative;z-index:2">
+        <div class="nf-scrubber" id="scrubber">
+          <div class="nf-scrubber-track">
+            <div class="nf-scrubber-fill" id="progress">
+              <div class="nf-scrubber-knob"></div>
+            </div>
+          </div>
+        </div>
+        <div class="nf-bar">
+          <div class="nf-bar-left">
+            <!-- Play/Pause -->
+            <div class="nf-btn" id="playPauseBtn" title="Play">
+              <svg id="ppIcon" viewBox="0 0 24 24"><path d="M6 4l15 8-15 8V4z"/></svg>
+            </div>
+            <!-- Back 10s -->
+            <div class="nf-btn" id="backBtn" title="Back 10s">
+              <svg viewBox="0 0 24 24"><path d="M12.5 3C7.26 3 3 7.26 3 12.5S7.26 22 12.5 22 22 17.74 22 12.5h-2c0 4.14-3.36 7.5-7.5 7.5S5 16.64 5 12.5 8.36 5 12.5 5V3z"/><text x="9" y="16" font-size="8" fill="#fff" font-weight="700">10</text></svg>
+            </div>
+            <!-- Forward 10s -->
+            <div class="nf-btn" id="fwdBtn" title="Forward 10s">
+              <svg viewBox="0 0 24 24"><path d="M11.5 3v2c4.14 0 7.5 3.36 7.5 7.5S15.64 20 11.5 20 4 16.64 4 12.5H2C2 17.74 6.26 22 11.5 22S21 17.74 21 12.5 16.74 3 11.5 3z"/><text x="8" y="16" font-size="8" fill="#fff" font-weight="700">10</text></svg>
+            </div>
+            <!-- Volume -->
+            <div class="nf-volume-wrap">
+              <div class="nf-btn" id="muteBtn" title="Volume">
+                <svg id="volIcon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path id="volWave" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+              </div>
+              <div class="nf-volume-slider-wrap">
+                <input type="range" class="nf-volume-slider" id="volSlider" min="0" max="100" value="0">
+              </div>
+            </div>
+            <span class="nf-time" id="timeDisplay">0:00</span>
+          </div>
+          <div class="nf-bar-center"></div>
+          <div class="nf-bar-right">
+            <!-- Shop -->
+            <div class="nf-btn nf-shop-btn" id="shopBtn" title="Shop">
+              <div class="nf-shop-dot"></div>
+              <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 6.66l.86 1.84H18l1.1-2H7.16zM5.16 4l-.96-2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7l1.1-2h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0020.01 4H5.16z"/></svg>
+            </div>
+            <!-- Fullscreen -->
+            <div class="nf-btn" id="fsBtn" title="Fullscreen">
+              <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+// ===== YOUTUBE BACKGROUND =====
+let ytPlayer = null;
+let isMuted = true;
+let isPlaying = true;
+let hideTimer = null;
+
+function onYouTubeIframeAPIReady() {
+  ytPlayer = new YT.Player('ytContainer', {
+    videoId: 'UNo0TG9LwwI',
+    playerVars: {
+      autoplay: 1, mute: 1, controls: 0, showinfo: 0, modestbranding: 1,
+      rel: 0, loop: 1, playlist: 'UNo0TG9LwwI', start: 42,
+      disablekb: 1, fs: 0, iv_load_policy: 3, playsinline: 1
+    },
+    events: {
+      onReady: function(e) {
+        e.target.playVideo();
+        ppIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+        isPlaying = true;
+      },
+      onStateChange: function(e) {
+        if (e.data === YT.PlayerState.ENDED) e.target.playVideo();
+      }
+    }
+  });
+}
+
+// ===== DOM =====
+const ppIcon = document.getElementById('ppIcon');
+const bigPlay = document.getElementById('bigPlay');
+const bigPlayIcon = document.getElementById('bigPlayIcon');
+const volIcon = document.getElementById('volIcon');
+const volSlider = document.getElementById('volSlider');
+const controls = document.getElementById('controls');
+const playerEl = document.getElementById('player');
+
+// ===== SHOW/HIDE CONTROLS =====
+function showControls() {
+  controls.classList.add('show');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => { controls.classList.remove('show'); }, 3000);
+}
+playerEl.addEventListener('mousemove', showControls);
+playerEl.addEventListener('click', function(e) {
+  if (e.target.closest('.nf-controls') || e.target.closest('#productCard') || e.target.closest('#shopDrawer') || e.target.closest('#shopOverlay') || e.target.closest('#shopList') || e.target.closest('#shopListOverlay')) return;
+  togglePlay();
+});
+
+// ===== PLAY / PAUSE =====
+function togglePlay() {
+  if (!ytPlayer) return;
+  if (isPlaying) {
+    ytPlayer.pauseVideo();
+    ppIcon.innerHTML = '<path d="M6 4l15 8-15 8V4z"/>';
+    bigPlayIcon.innerHTML = '<path d="M6 4l15 8-15 8V4z"/>';
+  } else {
+    ytPlayer.playVideo();
+    ppIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+    bigPlayIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+  }
+  isPlaying = !isPlaying;
+  bigPlay.classList.add('show');
+  setTimeout(() => bigPlay.classList.remove('show'), 600);
+}
+
+document.getElementById('playPauseBtn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  togglePlay();
+});
+
+// ===== SKIP BACK/FORWARD =====
+document.getElementById('backBtn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  if (!ytPlayer) return;
+  ytPlayer.seekTo(Math.max(0, ytPlayer.getCurrentTime() - 10), true);
+});
+document.getElementById('fwdBtn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  if (!ytPlayer) return;
+  ytPlayer.seekTo(ytPlayer.getCurrentTime() + 10, true);
+});
+
+// ===== VOLUME =====
+document.getElementById('muteBtn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  if (!ytPlayer) return;
+  if (isMuted) {
+    ytPlayer.unMute();
+    ytPlayer.setVolume(parseInt(volSlider.value) || 50);
+    if (volSlider.value === '0') volSlider.value = 50;
+    volIcon.innerHTML = '<path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+  } else {
+    ytPlayer.mute();
+    volIcon.innerHTML = '<path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" opacity=".3"/>';
+  }
+  isMuted = !isMuted;
+});
+
+volSlider.addEventListener('input', function(e) {
+  e.stopPropagation();
+  if (!ytPlayer) return;
+  const v = parseInt(this.value);
+  ytPlayer.setVolume(v);
+  if (v === 0) {
+    ytPlayer.mute();
+    isMuted = true;
+    volIcon.innerHTML = '<path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" opacity=".3"/>';
+  } else {
+    ytPlayer.unMute();
+    isMuted = false;
+    volIcon.innerHTML = '<path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+  }
+});
+
+// ===== FULLSCREEN =====
+document.getElementById('fsBtn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  if (!document.fullscreenElement) {
+    playerEl.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+// ===== KEYBOARD SHORTCUTS =====
+document.addEventListener('keydown', function(e) {
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'KeyM') { document.getElementById('muteBtn').click(); }
+  if (e.code === 'KeyF') { document.getElementById('fsBtn').click(); }
+  if (e.code === 'ArrowLeft' && ytPlayer) { ytPlayer.seekTo(Math.max(0, ytPlayer.getCurrentTime() - 10), true); }
+  if (e.code === 'ArrowRight' && ytPlayer) { ytPlayer.seekTo(ytPlayer.getCurrentTime() + 10, true); }
+});
+
+// ===== PRODUCTS =====
+const products = [
+  { img: 'https://cdn-contents.weverseshop.io/public/shop/2c24d6dc2dda4ab6ceaef14b53985a03.png?w=720&q=95', name: 'ARIRANG Official Hoodie', desc: 'Concert merch \u2014 as seen on stage', price: '$68.00', time: 8 },
+  { img: 'https://cdn-contents.weverseshop.io/public/shop/2c24d6dc2dda4ab6ceaef14b53985a03.png?w=720&q=95', name: 'BTS LIGHT STICK VER.4', desc: 'Syncs with concert in real-time', price: '$35.05', time: 22 },
+  { img: 'https://cdn-contents.weverseshop.io/public/shop/2c24d6dc2dda4ab6ceaef14b53985a03.png?w=720&q=95', name: 'ARIRANG \u2014 Living Legend Ver.', desc: 'Deluxe album with expanded photobook', price: '$28.90', time: 38 },
+  { img: 'https://cdn-contents.weverseshop.io/public/shop/2c24d6dc2dda4ab6ceaef14b53985a03.png?w=720&q=95', name: 'ARIRANG Official Ball Cap', desc: 'Embroidered ARIRANG design', price: 'See Weverse', time: 52 },
+];
+
+const songs = [
+  { name: 'Dynamite', start: 0 },
+  { name: 'VCR Interlude', start: 15 },
+  { name: 'ARIRANG (Title Track)', start: 32 },
+  { name: 'Encore \u2014 Spring Day', start: 48 },
+];
+
+const totalTime = 60;
+const card = document.getElementById('productCard');
+const cardImg = document.getElementById('cardImg');
+const cardName = document.getElementById('cardName');
+const cardDesc = document.getElementById('cardDesc');
+const cardPrice = document.getElementById('cardPrice');
+const songInfoEl = document.getElementById('songInfo');
+const progress = document.getElementById('progress');
+const timeDisplay = document.getElementById('timeDisplay');
+const dismissBtn = document.getElementById('dismissBtn');
+const buyBtn = document.getElementById('buyBtn');
+
+let elapsed = 0;
+let cardVisible = false;
+let dismissed = false;
+
+dismissBtn.addEventListener('click', () => {
+  card.classList.remove('visible');
+  cardVisible = false;
+  dismissed = true;
+  setTimeout(() => { dismissed = false; }, 8);
+});
+
+// ===== SHOP DRAWER =====
+const shopDrawer = document.getElementById('shopDrawer');
+const shopOverlay = document.getElementById('shopOverlay');
+const drawerProduct = document.getElementById('drawerProduct');
+const drawerCheckout = document.getElementById('drawerCheckout');
+const drawerConfirm = document.getElementById('drawerConfirm');
+const drawerTitle = document.getElementById('drawerTitle');
+let selectedSize = 'L';
+let qty = 1;
+let currentProduct = null;
+
+function openDrawer(product) {
+  currentProduct = product;
+  document.getElementById('drawerImg').src = product.img;
+  document.getElementById('drawerName').textContent = product.name;
+  document.getElementById('drawerPrice').textContent = product.price;
+  drawerProduct.style.display = 'block';
+  drawerCheckout.classList.remove('active');
+  drawerConfirm.classList.remove('active');
+  drawerTitle.textContent = 'Quick View';
+  selectedSize = 'L';
+  qty = 1;
+  document.getElementById('qtyVal').textContent = '1';
+  document.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('selected', b.dataset.size === 'L'));
+  shopDrawer.classList.add('open');
+  shopOverlay.classList.add('open');
+}
+
+function closeDrawer() {
+  shopDrawer.classList.remove('open');
+  shopOverlay.classList.remove('open');
+}
+
+buyBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (currentProduct || cardVisible) {
+    const p = currentProduct || { img: cardImg.src, name: cardName.textContent, desc: cardDesc.textContent, price: cardPrice.textContent };
+    openDrawer(p);
+  }
+});
+
+shopOverlay.addEventListener('click', closeDrawer);
+document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+
+// Size selector
+document.getElementById('drawerSizes').addEventListener('click', (e) => {
+  const btn = e.target.closest('.size-btn');
+  if (!btn) return;
+  selectedSize = btn.dataset.size;
+  document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+});
+
+// Quantity
+document.getElementById('qtyMinus').addEventListener('click', () => {
+  if (qty > 1) { qty--; document.getElementById('qtyVal').textContent = qty; }
+});
+document.getElementById('qtyPlus').addEventListener('click', () => {
+  if (qty < 10) { qty++; document.getElementById('qtyVal').textContent = qty; }
+});
+
+// Add to Bag → show checkout
+document.getElementById('addToBagBtn').addEventListener('click', () => {
+  if (!currentProduct) return;
+  drawerProduct.style.display = 'none';
+  drawerCheckout.classList.add('active');
+  drawerTitle.textContent = 'Checkout';
+  // Populate checkout summary
+  document.getElementById('checkoutImg').src = currentProduct.img;
+  document.getElementById('checkoutName').textContent = currentProduct.name;
+  document.getElementById('checkoutMeta').textContent = 'Size: ' + selectedSize + ' \u00b7 Qty: ' + qty;
+  const priceNum = parseFloat(currentProduct.price.replace(/[^0-9.]/g, ''));
+  const total = (priceNum * qty).toFixed(2);
+  document.getElementById('checkoutPrice').textContent = '$' + total;
+  document.getElementById('checkoutBuyBtn').textContent = 'Buy Now \u2014 $' + total;
+});
+
+// Buy Now → loading → confirmation
+document.getElementById('checkoutBuyBtn').addEventListener('click', () => {
+  drawerCheckout.classList.remove('active');
+  drawerConfirm.classList.add('active');
+  drawerTitle.textContent = 'Order';
+  // Loading state
+  drawerConfirm.innerHTML = '<div class="checkout-spinner"></div><div style="color:#999;font-size:13px">Processing payment...</div>';
+  setTimeout(() => {
+    // Show confirmation
+    drawerConfirm.innerHTML = '<div class="confirm-check"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></div><div class="confirm-title">Order Confirmed!</div><div class="confirm-sub">Check your email for receipt &amp; tracking info.</div>';
+    // Auto-close after 3s
+    setTimeout(closeDrawer, 3000);
+  }, 1200);
+});
+
+// Escape key closes drawer
+document.addEventListener('keydown', function(e) {
+  if (e.code === 'Escape' && shopDrawer.classList.contains('open')) {
+    e.preventDefault();
+    closeDrawer();
+  }
+});
+
+function showCard(p) {
+  if (dismissed) return;
+  cardImg.src = p.img;
+  cardImg.onerror = function() { this.style.display = 'none'; };
+  cardImg.onload = function() { this.style.display = 'block'; };
+  cardName.textContent = p.name;
+  cardDesc.textContent = p.desc;
+  cardPrice.textContent = p.price;
+  card.classList.add('visible');
+  cardVisible = true;
+  setTimeout(() => {
+    if (cardVisible) {
+      card.classList.remove('visible');
+      cardVisible = false;
+    }
+  }, 10000);
+}
+
+function updateSong() {
+  let current = songs[0];
+  for (const s of songs) { if (elapsed >= s.start) current = s; }
+  songInfoEl.textContent = current.name;
+}
+
+setInterval(() => {
+  elapsed += 0.5;
+  if (elapsed >= totalTime) elapsed = 0;
+  progress.style.width = (elapsed / totalTime * 100) + '%';
+  const m = Math.floor(elapsed / 60);
+  const s = Math.floor(elapsed % 60);
+  timeDisplay.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  updateSong();
+  for (const p of products) {
+    if (Math.abs(elapsed - p.time) < 0.6 && !cardVisible && !dismissed) {
+      showCard(p);
+    }
+  }
+}, 500);
+
+// ===== PRODUCT LIST (Netflix Season Style) =====
+const shopList = document.getElementById('shopList');
+const shopListOverlay = document.getElementById('shopListOverlay');
+const shopListItems = document.getElementById('shopListItems');
+
+// Build product list items
+products.forEach((p, i) => {
+  const item = document.createElement('div');
+  item.className = i === 0 ? 'pl-item expanded' : 'pl-item';
+  item.innerHTML = '<div class="pl-row">'
+    + '<div class="pl-number">' + (i + 1) + '</div>'
+    + '<div class="pl-info"><div class="pl-name">' + p.name + '</div><div class="pl-price-small">' + p.price + '</div></div>'
+    + '<svg class="pl-chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>'
+    + '</div>'
+    + '<div class="pl-detail"><div class="pl-detail-inner">'
+    + '<img class="pl-thumb" src="' + p.img + '" alt="' + p.name + '">'
+    + '<div class="pl-detail-content">'
+    + '<div class="pl-desc">' + p.desc + '</div>'
+    + '<div class="pl-price-big">' + p.price + '</div>'
+    + '<div class="pl-official">&#10003; Official BTS Merchandise</div>'
+    + '<button class="pl-buy-btn" data-index="' + i + '"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 6.66l.86 1.84H18l1.1-2H7.16zM5.16 4l-.96-2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7l1.1-2h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0020.01 4H5.16z"/></svg> Buy Now</button>'
+    + '</div></div></div>';
+
+  // Toggle expand/collapse on row click
+  item.querySelector('.pl-row').addEventListener('click', () => {
+    const wasExpanded = item.classList.contains('expanded');
+    // Collapse all
+    document.querySelectorAll('.pl-item').forEach(el => el.classList.remove('expanded'));
+    // Expand this one (if it wasn't already open)
+    if (!wasExpanded) item.classList.add('expanded');
+  });
+
+  // Buy button → open drawer
+  item.querySelector('.pl-buy-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeShopList();
+    openDrawer(products[i]);
+  });
+
+  shopListItems.appendChild(item);
+});
+
+function openShopList() {
+  shopList.classList.add('open');
+  shopListOverlay.classList.add('open');
+  card.classList.remove('visible');
+  cardVisible = false;
+}
+
+function closeShopList() {
+  shopList.classList.remove('open');
+  shopListOverlay.classList.remove('open');
+}
+
+document.getElementById('shopBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (shopList.classList.contains('open')) closeShopList();
+  else openShopList();
+});
+
+document.getElementById('shopListClose').addEventListener('click', closeShopList);
+shopListOverlay.addEventListener('click', closeShopList);
+
+// Escape closes list
+document.addEventListener('keydown', function(e) {
+  if (e.code === 'Escape' && shopList.classList.contains('open') && !shopDrawer.classList.contains('open')) {
+    closeShopList();
+  }
+});
+
+// Clicking the notification card also opens list
+card.addEventListener('click', (e) => {
+  if (e.target.closest('#buyBtn') || e.target.closest('#dismissBtn')) return;
+  card.classList.remove('visible');
+  cardVisible = false;
+  openShopList();
+});
+</script>
+
+</body>
+</html>
