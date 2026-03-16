@@ -3,404 +3,679 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StreamShop Demo — Netflix Live Commerce Overlay</title>
-<meta name="description" content="StreamShop demo: see how product cards appear during a live Netflix stream, enabling one-click purchases without leaving the content.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23E50914'/><stop offset='1' stop-color='%23ff4d58'/></linearGradient></defs><rect width='32' height='32' rx='7' fill='url(%23g)'/><polygon points='12,8 12,24 24,16' fill='white'/><path d='M20 20l4 6h-5l-2.5-3.5L14 26H9l4-6' fill='white' opacity='.85'/></svg>">
+<title>StreamShop × BTS — Live Concert Commerce Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; }
-  body { background: #000; font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif; cursor: default; }
-  .wrapper { width: 100%; height: 100%; }
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#06050A;--surface:rgba(14,12,22,0.95);--surface2:rgba(22,18,35,0.9);
+  --border:rgba(123,45,142,0.12);--border-hover:rgba(123,45,142,0.3);
+  --text:#F2F0F7;--dim:#9B92B0;--muted:#5C5475;
+  --purple:#7B2D8E;--purple-glow:rgba(123,45,142,0.35);--purple-dim:rgba(123,45,142,0.12);
+  --violet:#9333EA;--pink:#EC4899;--pink-dim:rgba(236,72,153,0.12);
+  --gold:#F5C842;--gold-dim:rgba(245,200,66,0.12);
+  --green:#22C55E;--green-dim:rgba(34,197,94,0.12);
+  --bts-purple:#7B2D8E;
+  --font:'Outfit',sans-serif;--mono:'JetBrains Mono',monospace;
+  --radius:14px;--radius-sm:8px;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font);overflow-x:hidden;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 50% 0%,rgba(123,45,142,0.08) 0%,transparent 70%),radial-gradient(ellipse 50% 40% at 80% 100%,rgba(147,51,234,0.05) 0%,transparent 70%);pointer-events:none;z-index:0}
 
-  /* Netflix controls */
-  .nf-player { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; }
-  .nf-controls { position: absolute; bottom: 0; left: 0; right: 0; z-index: 30; opacity: 0; transition: opacity .3s; }
-  .nf-player:hover .nf-controls, .nf-controls.show { opacity: 1; }
-  .nf-gradient { position: absolute; bottom: 0; left: 0; right: 0; height: 200px; background: linear-gradient(transparent, rgba(0,0,0,.7) 60%, rgba(0,0,0,.9)); pointer-events: none; }
-  .nf-scrubber { position: relative; height: 6px; margin: 0 16px; cursor: pointer; }
-  .nf-scrubber-track { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,.2); border-radius: 2px; transition: height .1s; }
-  .nf-scrubber:hover .nf-scrubber-track { height: 6px; }
-  .nf-scrubber-fill { height: 100%; background: #E50914; border-radius: 2px; width: 0%; transition: width .3s linear; position: relative; }
-  .nf-scrubber-knob { position: absolute; right: -6px; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; background: #E50914; border-radius: 50%; opacity: 0; transition: opacity .1s; }
-  .nf-scrubber:hover .nf-scrubber-knob { opacity: 1; }
-  .nf-bar { display: flex; align-items: center; padding: 8px 16px 16px; gap: 4px; }
-  .nf-bar-left { display: flex; align-items: center; gap: 4px; }
-  .nf-bar-center { flex: 1; display: flex; justify-content: center; }
-  .nf-bar-right { display: flex; align-items: center; gap: 4px; }
-  .nf-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; transition: background .15s; color: #fff; }
-  .nf-btn:hover { background: rgba(255,255,255,.1); }
-  .nf-btn svg { width: 24px; height: 24px; fill: #fff; }
-  .nf-volume-wrap { display: flex; align-items: center; position: relative; }
-  .nf-volume-slider-wrap { width: 0; overflow: hidden; transition: width .2s; display: flex; align-items: center; }
-  .nf-volume-wrap:hover .nf-volume-slider-wrap { width: 80px; }
-  .nf-volume-slider { -webkit-appearance: none; appearance: none; width: 70px; height: 3px; background: rgba(255,255,255,.3); border-radius: 2px; outline: none; margin: 0 8px 0 0; cursor: pointer; }
-  .nf-volume-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #fff; border-radius: 50%; cursor: pointer; }
-  .nf-title-bar { position: absolute; top: 0; left: 0; right: 0; padding: 20px 24px; z-index: 30; opacity: 0; transition: opacity .3s; background: linear-gradient(rgba(0,0,0,.7), transparent); display: flex; align-items: center; gap: 12px; }
-  .nf-player:hover .nf-title-bar { opacity: 1; }
-  .nf-episode-title { font-size: 18px; font-weight: 700; color: #fff; }
-  .nf-episode-sub { font-size: 14px; color: rgba(255,255,255,.6); }
-  .nf-time { font-size: 13px; color: rgba(255,255,255,.7); font-variant-numeric: tabular-nums; min-width: 40px; padding: 0 4px; }
-  .nf-live-badge { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-  .nf-live-dot { width: 8px; height: 8px; background: #E50914; border-radius: 50%; animation: livePulse 1.5s ease-in-out infinite; }
-  .nf-live-text { font-size: 12px; font-weight: 700; color: #fff; letter-spacing: .05em; }
-  .nf-big-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 25; opacity: 0; transition: opacity .15s; pointer-events: none; }
-  .nf-big-play.show { opacity: 1; }
-  .nf-big-play svg { width: 60px; height: 60px; fill: #fff; filter: drop-shadow(0 2px 12px rgba(0,0,0,.6)); }
-  .nf-n-logo { font-size: 26px; font-weight: 900; color: #E50914; line-height: 1; }
+/* ─── Hero ─────────────────────────────────────── */
+.hero{position:relative;z-index:1;text-align:center;padding:60px 20px 40px;max-width:800px;margin:0 auto}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 18px;background:var(--purple-dim);border:1px solid var(--border);border-radius:100px;font-size:11px;font-weight:600;color:var(--purple);letter-spacing:1px;text-transform:uppercase;margin-bottom:24px}
+.hero-badge .pulse{width:6px;height:6px;border-radius:50%;background:var(--purple);animation:pulse 2s ease infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--purple-glow)}50%{box-shadow:0 0 0 8px transparent}}
+.hero h1{font-size:clamp(32px,5vw,52px);font-weight:900;line-height:1.1;margin-bottom:16px;letter-spacing:-1px}
+.hero h1 .stream{color:var(--text)}
+.hero h1 .shop{color:var(--purple)}
+.hero h1 .times{color:var(--muted);font-weight:300;margin:0 8px}
+.hero h1 .bts{background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:16px;color:var(--dim);line-height:1.7;max-width:620px;margin:0 auto 32px}
+.hero-stats{display:flex;justify-content:center;gap:32px;flex-wrap:wrap;margin-bottom:40px}
+.stat{text-align:center}
+.stat-num{font-size:28px;font-weight:800;font-family:var(--mono);background:linear-gradient(135deg,var(--purple),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-label{font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
 
-  /* Product card — Netflix style */
-  .nf-card { position: absolute; right: 16px; bottom: 90px; width: clamp(220px, 22vw, 300px); background: #2b2b2b; border-radius: 6px; z-index: 35; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,.6); transform: translateY(20px); opacity: 0; pointer-events: none; transition: transform .4s cubic-bezier(.22,1,.36,1), opacity .4s; }
-  .nf-card.visible { transform: translateY(0); opacity: 1; pointer-events: auto; }
-  .nf-card-img-wrap { position: relative; width: 100%; aspect-ratio: 4/3; background: #3a3a3a; overflow: hidden; }
-  .nf-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .nf-card-badge { position: absolute; top: 8px; left: 8px; font-size: 9px; font-weight: 700; letter-spacing: .08em; color: #fff; background: #E50914; padding: 3px 8px; border-radius: 3px; }
-  .nf-card-body { padding: 12px 14px 10px; }
-  .nf-card-name { font-size: 15px; font-weight: 700; color: #fff; line-height: 1.3; margin-bottom: 3px; }
-  .nf-card-desc { font-size: 12px; color: #999; line-height: 1.3; margin-bottom: 10px; }
-  .nf-card-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .nf-card-price { font-size: 18px; font-weight: 800; color: #fff; }
-  .nf-card-official { font-size: 10px; font-weight: 600; color: #46d369; }
-  .nf-card-buy { width: 100%; padding: 10px; background: #E50914; color: #fff; font-size: 13px; font-weight: 700; border: none; border-radius: 4px; text-align: center; cursor: pointer; transition: background .15s; }
-  .nf-card-buy:hover { background: #f40612; }
-  .nf-card-dismiss { text-align: center; margin-top: 6px; font-size: 11px; color: #666; cursor: pointer; padding: 4px; }
-  .nf-card-dismiss:hover { color: #999; }
+/* ─── Scenario Selector ────────────────────────── */
+.scenarios{position:relative;z-index:1;max-width:900px;margin:0 auto 40px;padding:0 20px}
+.scenario-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.scenario-btn{padding:16px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:center;transition:all 0.3s;position:relative;overflow:hidden}
+.scenario-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--purple),var(--pink));opacity:0;transition:opacity 0.3s}
+.scenario-btn:hover{border-color:var(--border-hover);transform:translateY(-2px)}
+.scenario-btn:hover::before{opacity:1}
+.scenario-btn.active{border-color:var(--purple);background:var(--purple-dim)}
+.scenario-btn.active::before{opacity:1}
+.scenario-emoji{font-size:24px;margin-bottom:6px}
+.scenario-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px}
+.scenario-desc{font-size:9px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase}
 
-  @keyframes livePulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+/* ─── Player Section ───────────────────────────── */
+.player-section{position:relative;z-index:1;max-width:1100px;margin:0 auto 60px;padding:0 20px}
+.player-frame{position:relative;background:#000;border-radius:16px;overflow:hidden;aspect-ratio:16/9;border:1px solid rgba(123,45,142,0.15);box-shadow:0 20px 80px rgba(123,45,142,0.15)}
 
-  /* ===== SHOP DRAWER ===== */
-  .shop-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 50; opacity: 0; pointer-events: none; transition: opacity .3s; }
-  .shop-overlay.open { opacity: 1; pointer-events: auto; }
+/* ─── Fullscreen Toggle Button ────────────────── */
+.fs-toggle-btn{position:absolute;top:12px;right:12px;z-index:55;display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.15);border-radius:100px;color:#fff;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.3s;opacity:0;pointer-events:none}
+.player-frame:hover .fs-toggle-btn{opacity:1;pointer-events:auto}
+.fs-toggle-btn:hover{background:rgba(123,45,142,0.6);border-color:var(--purple);box-shadow:0 0 16px var(--purple-glow)}
+.player-frame:fullscreen{border-radius:0;aspect-ratio:auto;width:100vw;height:100vh;border:none;box-shadow:none}
+.player-frame:-webkit-full-screen{border-radius:0;aspect-ratio:auto;width:100vw;height:100vh;border:none;box-shadow:none}
 
-  .shop-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: clamp(340px, 30vw, 420px); background: #181818; z-index: 51; transform: translateX(100%); transition: transform .35s cubic-bezier(.22,1,.36,1); display: flex; flex-direction: column; overflow-y: auto; box-shadow: -4px 0 30px rgba(0,0,0,.6); }
-  .shop-drawer.open { transform: translateX(0); }
+/* ─── Netflix Player (embedded) ───────────────── */
+.nf-player{position:relative;width:100%;height:100%;background:#000;overflow:hidden;font-family:'Netflix Sans','Helvetica Neue',Helvetica,Arial,sans-serif;cursor:default}
+.nf-controls{position:absolute;bottom:0;left:0;right:0;z-index:30;opacity:0;transition:opacity .3s}
+.nf-player:hover .nf-controls,.nf-controls.show{opacity:1}
+.nf-gradient{position:absolute;bottom:0;left:0;right:0;height:200px;background:linear-gradient(transparent,rgba(0,0,0,.7) 60%,rgba(0,0,0,.9));pointer-events:none}
+.nf-scrubber{position:relative;height:6px;margin:0 16px;cursor:pointer}
+.nf-scrubber-track{position:absolute;bottom:0;left:0;right:0;height:4px;background:rgba(255,255,255,.2);border-radius:2px;transition:height .1s}
+.nf-scrubber:hover .nf-scrubber-track{height:6px}
+.nf-scrubber-fill{height:100%;background:#E50914;border-radius:2px;width:0%;transition:width .3s linear;position:relative}
+.nf-scrubber-knob{position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:12px;height:12px;background:#E50914;border-radius:50%;opacity:0;transition:opacity .1s}
+.nf-scrubber:hover .nf-scrubber-knob{opacity:1}
+.nf-bar{display:flex;align-items:center;padding:8px 16px 16px;gap:4px}
+.nf-bar-left{display:flex;align-items:center;gap:4px}
+.nf-bar-center{flex:1;display:flex;justify-content:center}
+.nf-bar-right{display:flex;align-items:center;gap:4px}
+.nf-btn{width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:50%;transition:background .15s;color:#fff}
+.nf-btn:hover{background:rgba(255,255,255,.1)}
+.nf-btn svg{width:24px;height:24px;fill:#fff}
+.nf-volume-wrap{display:flex;align-items:center;position:relative}
+.nf-volume-slider-wrap{width:0;overflow:hidden;transition:width .2s;display:flex;align-items:center}
+.nf-volume-wrap:hover .nf-volume-slider-wrap{width:80px}
+.nf-volume-slider{-webkit-appearance:none;appearance:none;width:70px;height:3px;background:rgba(255,255,255,.3);border-radius:2px;outline:none;margin:0 8px 0 0;cursor:pointer}
+.nf-volume-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#fff;border-radius:50%;cursor:pointer}
+.nf-title-bar{position:absolute;top:0;left:0;right:0;padding:20px 24px;z-index:30;opacity:0;transition:opacity .3s;background:linear-gradient(rgba(0,0,0,.7),transparent);display:flex;align-items:center;gap:12px}
+.nf-player:hover .nf-title-bar{opacity:1}
+.nf-episode-title{font-size:18px;font-weight:700;color:#fff}
+.nf-episode-sub{font-size:14px;color:rgba(255,255,255,.6)}
+.nf-time{font-size:13px;color:rgba(255,255,255,.7);font-variant-numeric:tabular-nums;min-width:40px;padding:0 4px}
+.nf-live-badge{display:flex;align-items:center;gap:6px;margin-left:auto}
+.nf-live-dot{width:8px;height:8px;background:#E50914;border-radius:50%;animation:livePulse 1.5s ease-in-out infinite}
+.nf-live-text{font-size:12px;font-weight:700;color:#fff;letter-spacing:.05em}
+.nf-big-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:25;opacity:0;transition:opacity .15s;pointer-events:none}
+.nf-big-play.show{opacity:1}
+.nf-big-play svg{width:60px;height:60px;fill:#fff;filter:drop-shadow(0 2px 12px rgba(0,0,0,.6))}
+.nf-n-logo{font-size:26px;font-weight:900;color:#E50914;line-height:1}
 
-  .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #2a2a2a; flex-shrink: 0; }
-  .drawer-header h2 { font-size: 16px; font-weight: 700; color: #fff; }
-  .drawer-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; transition: background .15s; color: #fff; background: none; border: none; font-size: 20px; }
-  .drawer-close:hover { background: rgba(255,255,255,.1); }
+/* Product card — Netflix style */
+.nf-card{position:absolute;right:16px;bottom:90px;width:clamp(220px,22vw,300px);background:#2b2b2b;border-radius:6px;z-index:35;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.6);transform:translateY(20px);opacity:0;pointer-events:none;transition:transform .4s cubic-bezier(.22,1,.36,1),opacity .4s}
+.nf-card.visible{transform:translateY(0);opacity:1;pointer-events:auto}
+.nf-card-img-wrap{position:relative;width:100%;aspect-ratio:4/3;background:#3a3a3a;overflow:hidden}
+.nf-card-img{width:100%;height:100%;object-fit:cover;display:block}
+.nf-card-badge{position:absolute;top:8px;left:8px;font-size:9px;font-weight:700;letter-spacing:.08em;color:#fff;background:#E50914;padding:3px 8px;border-radius:3px}
+.nf-card-body{padding:12px 14px 10px}
+.nf-card-name{font-size:15px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:3px}
+.nf-card-desc{font-size:12px;color:#999;line-height:1.3;margin-bottom:10px}
+.nf-card-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.nf-card-price{font-size:18px;font-weight:800;color:#fff}
+.nf-card-official{font-size:10px;font-weight:600;color:#46d369}
+.nf-card-buy{width:100%;padding:10px;background:#E50914;color:#fff;font-size:13px;font-weight:700;border:none;border-radius:4px;text-align:center;cursor:pointer;transition:background .15s}
+.nf-card-buy:hover{background:#f40612}
+.nf-card-dismiss{text-align:center;margin-top:6px;font-size:11px;color:#666;cursor:pointer;padding:4px}
+.nf-card-dismiss:hover{color:#999}
 
-  /* Product section */
-  .drawer-product { padding: 20px; }
-  .drawer-img-carousel { position: relative; width: 100%; aspect-ratio: 1/1; background: #2a2a2a; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
-  .drawer-img-carousel img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .drawer-product-name { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 4px; }
-  .drawer-product-desc { font-size: 13px; color: #999; margin-bottom: 12px; line-height: 1.4; }
-  .drawer-product-price { font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 20px; }
-  .drawer-official-badge { display: inline-block; font-size: 11px; font-weight: 600; color: #46d369; margin-left: 8px; vertical-align: middle; }
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-  /* Size selector */
-  .drawer-option-label { font-size: 12px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
-  .drawer-sizes { display: flex; gap: 8px; margin-bottom: 20px; }
-  .size-btn { padding: 8px 16px; background: #2a2a2a; color: #fff; border: 2px solid #3a3a3a; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
-  .size-btn:hover { border-color: #666; }
-  .size-btn.selected { border-color: #E50914; background: rgba(229,9,20,.15); color: #fff; }
+/* ===== SHOP DRAWER ===== */
+.shop-overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:50;opacity:0;pointer-events:none;transition:opacity .3s}
+.shop-overlay.open{opacity:1;pointer-events:auto}
+.shop-drawer{position:absolute;top:0;right:0;bottom:0;width:clamp(340px,30vw,420px);background:#181818;z-index:51;transform:translateX(100%);transition:transform .35s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column;overflow-y:auto;box-shadow:-4px 0 30px rgba(0,0,0,.6)}
+.shop-drawer.open{transform:translateX(0)}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #2a2a2a;flex-shrink:0}
+.drawer-header h2{font-size:16px;font-weight:700;color:#fff}
+.drawer-close{width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:50%;transition:background .15s;color:#fff;background:none;border:none;font-size:20px}
+.drawer-close:hover{background:rgba(255,255,255,.1)}
+.drawer-product{padding:20px}
+.drawer-img-carousel{position:relative;width:100%;aspect-ratio:1/1;background:#2a2a2a;border-radius:8px;overflow:hidden;margin-bottom:16px}
+.drawer-img-carousel img{width:100%;height:100%;object-fit:cover;display:block}
+.drawer-product-name{font-size:20px;font-weight:700;color:#fff;margin-bottom:4px}
+.drawer-product-desc{font-size:13px;color:#999;margin-bottom:12px;line-height:1.4}
+.drawer-product-price{font-size:24px;font-weight:800;color:#fff;margin-bottom:20px}
+.drawer-official-badge{display:inline-block;font-size:11px;font-weight:600;color:#46d369;margin-left:8px;vertical-align:middle}
+.drawer-option-label{font-size:12px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.drawer-sizes{display:flex;gap:8px;margin-bottom:20px}
+.size-btn{padding:8px 16px;background:#2a2a2a;color:#fff;border:2px solid #3a3a3a;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.size-btn:hover{border-color:#666}
+.size-btn.selected{border-color:#E50914;background:rgba(229,9,20,.15);color:#fff}
+.drawer-qty{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.qty-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:6px;color:#fff;font-size:18px;cursor:pointer;transition:background .15s;user-select:none}
+.qty-btn:hover{background:#3a3a3a}
+.qty-val{font-size:16px;font-weight:700;color:#fff;min-width:20px;text-align:center}
+.drawer-add-btn{width:100%;padding:14px;background:#E50914;color:#fff;font-size:15px;font-weight:700;border:none;border-radius:6px;cursor:pointer;transition:background .15s,transform .1s}
+.drawer-add-btn:hover{background:#f40612}
+.drawer-add-btn:active{transform:scale(.98)}
 
-  /* Quantity */
-  .drawer-qty { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-  .qty-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; color: #fff; font-size: 18px; cursor: pointer; transition: background .15s; user-select: none; }
-  .qty-btn:hover { background: #3a3a3a; }
-  .qty-val { font-size: 16px; font-weight: 700; color: #fff; min-width: 20px; text-align: center; }
+/* ===== CHECKOUT VIEW ===== */
+.drawer-checkout{padding:20px;display:none}
+.drawer-checkout.active{display:block}
+.checkout-summary{display:flex;gap:14px;padding-bottom:16px;border-bottom:1px solid #2a2a2a;margin-bottom:20px}
+.checkout-summary img{width:80px;height:80px;object-fit:cover;border-radius:6px;background:#2a2a2a}
+.checkout-summary-info{flex:1}
+.checkout-summary-name{font-size:14px;font-weight:700;color:#fff;margin-bottom:4px}
+.checkout-summary-meta{font-size:12px;color:#999;margin-bottom:6px}
+.checkout-summary-price{font-size:16px;font-weight:800;color:#fff}
+.checkout-section{margin-bottom:20px}
+.checkout-section-title{font-size:12px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.checkout-card{display:flex;align-items:center;gap:12px;background:#2a2a2a;padding:12px 16px;border-radius:8px}
+.checkout-card-icon{font-size:24px}
+.checkout-card-info{flex:1}
+.checkout-card-label{font-size:13px;color:#fff;font-weight:600}
+.checkout-card-sub{font-size:11px;color:#999}
+.checkout-card-check{color:#46d369;font-size:16px}
+.checkout-input{width:100%;padding:10px 14px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:6px;color:#fff;font-size:13px;font-family:inherit;margin-bottom:8px;outline:none;transition:border-color .15s}
+.checkout-input:focus{border-color:#666}
+.checkout-input::placeholder{color:#666}
+.checkout-row{display:flex;gap:8px}
+.checkout-row .checkout-input{flex:1}
+.checkout-buy-btn{width:100%;padding:14px;background:#E50914;color:#fff;font-size:15px;font-weight:700;border:none;border-radius:6px;cursor:pointer;transition:background .15s,transform .1s;margin-top:8px}
+.checkout-buy-btn:hover{background:#f40612}
+.checkout-buy-btn:active{transform:scale(.98)}
 
-  /* Add to bag CTA */
-  .drawer-add-btn { width: 100%; padding: 14px; background: #E50914; color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; transition: background .15s, transform .1s; }
-  .drawer-add-btn:hover { background: #f40612; }
-  .drawer-add-btn:active { transform: scale(.98); }
+/* ===== CONFIRMATION VIEW ===== */
+.drawer-confirm{padding:20px;display:none;align-items:center;justify-content:center;flex-direction:column;flex:1;min-height:300px}
+.drawer-confirm.active{display:flex}
+.confirm-check{width:80px;height:80px;border-radius:50%;background:#46d369;display:flex;align-items:center;justify-content:center;margin-bottom:20px;animation:confirmPop .4s cubic-bezier(.22,1,.36,1)}
+.confirm-check svg{width:40px;height:40px;fill:#fff}
+.confirm-title{font-size:20px;font-weight:700;color:#fff;margin-bottom:6px}
+.confirm-sub{font-size:13px;color:#999;text-align:center;line-height:1.4}
+@keyframes confirmPop{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
 
-  /* ===== CHECKOUT VIEW ===== */
-  .drawer-checkout { padding: 20px; display: none; }
-  .drawer-checkout.active { display: block; }
-  .checkout-summary { display: flex; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid #2a2a2a; margin-bottom: 20px; }
-  .checkout-summary img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; background: #2a2a2a; }
-  .checkout-summary-info { flex: 1; }
-  .checkout-summary-name { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }
-  .checkout-summary-meta { font-size: 12px; color: #999; margin-bottom: 6px; }
-  .checkout-summary-price { font-size: 16px; font-weight: 800; color: #fff; }
+/* Loading spinner */
+.checkout-spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#E50914;border-radius:50%;animation:spin .6s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-  .checkout-section { margin-bottom: 20px; }
-  .checkout-section-title { font-size: 12px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
-  .checkout-card { display: flex; align-items: center; gap: 12px; background: #2a2a2a; padding: 12px 16px; border-radius: 8px; }
-  .checkout-card-icon { font-size: 24px; }
-  .checkout-card-info { flex: 1; }
-  .checkout-card-label { font-size: 13px; color: #fff; font-weight: 600; }
-  .checkout-card-sub { font-size: 11px; color: #999; }
-  .checkout-card-check { color: #46d369; font-size: 16px; }
+/* ===== PRODUCT LIST (Netflix Season/Episodes Style) ===== */
+.shop-list-overlay{position:absolute;inset:0;background:rgba(0,0,0,.6);z-index:40;opacity:0;pointer-events:none;transition:opacity .3s}
+.shop-list-overlay.open{opacity:1;pointer-events:auto}
+.shop-list{position:absolute;top:0;right:0;bottom:0;width:clamp(400px,40vw,560px);background:#1a1a1a;z-index:41;transform:translateX(100%);transition:transform .4s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column;overflow-y:auto;box-shadow:-4px 0 30px rgba(0,0,0,.7)}
+.shop-list.open{transform:translateX(0)}
+.shop-list-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #2e2e2e;flex-shrink:0;background:#222}
+.shop-list-header h2{font-size:20px;font-weight:700;color:#fff}
+.shop-list-close{width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:50%;border:none;background:none;color:#fff;font-size:22px;transition:background .15s}
+.shop-list-close:hover{background:rgba(255,255,255,.1)}
+.pl-item{border-bottom:1px solid #2e2e2e;cursor:pointer;transition:background .15s}
+.pl-item:hover{background:rgba(255,255,255,.04)}
+.pl-row{display:flex;align-items:center;padding:20px 24px;gap:18px}
+.pl-number{width:36px;flex-shrink:0;font-size:18px;font-weight:700;color:#f2f2f2}
+.pl-info{flex:1;min-width:0}
+.pl-name{font-size:17px;font-weight:700;color:#f5f5f5;line-height:1.2}
+.pl-price-small{font-size:13px;color:#999;margin-top:2px}
+.pl-chevron{width:24px;height:24px;flex-shrink:0;fill:#999;transition:transform .25s}
+.pl-item.expanded .pl-chevron{transform:rotate(180deg)}
+.pl-detail{max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.22,1,.36,1);background:#0f0f0f}
+.pl-item.expanded .pl-detail{max-height:500px}
+.pl-detail-inner{display:flex;gap:24px;padding:4px 24px 24px;align-items:flex-start}
+.pl-thumb{width:200px;aspect-ratio:1/1;object-fit:cover;flex-shrink:0;background:#2a2a2a;border-radius:6px}
+.pl-detail-content{flex:1;min-width:0;padding-top:2px}
+.pl-desc{font-size:14px;line-height:1.5;color:#bbb;margin-bottom:14px}
+.pl-price-big{font-size:22px;font-weight:800;color:#fff;margin-bottom:4px}
+.pl-official{font-size:11px;color:#46d369;font-weight:600;margin-bottom:16px}
+.pl-buy-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:#E50914;color:#fff;font-size:14px;font-weight:700;border:none;border-radius:4px;cursor:pointer;transition:background .15s}
+.pl-buy-btn:hover{background:#f40612}
+.pl-buy-btn svg{width:18px;height:18px;fill:currentColor}
+.nf-shop-btn{position:relative}
+.nf-shop-btn .nf-shop-dot{position:absolute;top:6px;right:6px;width:8px;height:8px;background:#E50914;border-radius:50%;animation:livePulse 1.5s ease-in-out infinite}
 
-  .checkout-input { width: 100%; padding: 10px 14px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; color: #fff; font-size: 13px; font-family: inherit; margin-bottom: 8px; outline: none; transition: border-color .15s; }
-  .checkout-input:focus { border-color: #666; }
-  .checkout-input::placeholder { color: #666; }
-  .checkout-row { display: flex; gap: 8px; }
-  .checkout-row .checkout-input { flex: 1; }
+/* ─── Checkout Modal (page-level) ─────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;overflow:hidden;animation:scaleIn 0.3s ease}
+@keyframes scaleIn{from{transform:scale(0.95);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-top{padding:24px;text-align:center;border-bottom:1px solid var(--border)}
+.modal-check{width:56px;height:56px;border-radius:50%;background:var(--green-dim);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--dim)}
+.modal-product{display:flex;align-items:center;gap:14px;padding:16px 24px;border-bottom:1px solid var(--border)}
+.modal-thumb{width:48px;height:48px;border-radius:var(--radius-sm);background:var(--purple-dim);display:flex;align-items:center;justify-content:center;font-size:20px}
+.modal-pinfo{flex:1}
+.modal-pname{font-size:13px;font-weight:500}
+.modal-pprice{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.modal-details{padding:16px 24px;font-size:11px;color:var(--dim)}
+.modal-detail-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.03)}
+.modal-detail-row:last-child{border:none}
+.modal-detail-label{color:var(--muted)}
+.modal-detail-value{font-weight:500;color:var(--text)}
+.modal-actions{padding:16px 24px;display:flex;gap:10px}
+.modal-btn{flex:1;padding:12px;border-radius:100px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;text-align:center;transition:all 0.3s;border:none}
+.modal-btn.primary{background:var(--purple);color:white}
+.modal-btn.primary:hover{box-shadow:0 4px 20px var(--purple-glow)}
+.modal-btn.secondary{background:rgba(255,255,255,0.05);color:var(--dim);border:1px solid var(--border)}
 
-  .checkout-buy-btn { width: 100%; padding: 14px; background: #E50914; color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; transition: background .15s, transform .1s; margin-top: 8px; }
-  .checkout-buy-btn:hover { background: #f40612; }
-  .checkout-buy-btn:active { transform: scale(.98); }
+/* ─── Info Section ─────────────────────────────── */
+.info-section{position:relative;z-index:1;max-width:900px;margin:0 auto 60px;padding:0 20px}
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;text-align:center}
+.info-icon{font-size:28px;margin-bottom:12px}
+.info-title{font-size:13px;font-weight:700;margin-bottom:6px}
+.info-text{font-size:11px;color:var(--dim);line-height:1.6}
+.info-stat{font-size:22px;font-weight:800;font-family:var(--mono);margin-top:10px;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 
-  /* ===== CONFIRMATION VIEW ===== */
-  .drawer-confirm { padding: 20px; display: none; align-items: center; justify-content: center; flex-direction: column; flex: 1; min-height: 300px; }
-  .drawer-confirm.active { display: flex; }
+/* ─── CTA Section ──────────────────────────────── */
+.cta-section{position:relative;z-index:1;text-align:center;padding:40px 20px 80px}
+.cta-title{font-size:24px;font-weight:800;margin-bottom:8px}
+.cta-sub{font-size:13px;color:var(--dim);margin-bottom:24px}
+.cta-btn{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:var(--purple);color:white;border:none;border-radius:100px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;transition:all 0.3s;text-decoration:none}
+.cta-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px var(--purple-glow)}
 
-  .confirm-check { width: 80px; height: 80px; border-radius: 50%; background: #46d369; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; animation: confirmPop .4s cubic-bezier(.22,1,.36,1); }
-  .confirm-check svg { width: 40px; height: 40px; fill: #fff; }
-  .confirm-title { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; }
-  .confirm-sub { font-size: 13px; color: #999; text-align: center; line-height: 1.4; }
+/* ─── Animations ───────────────────────────────── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
-  @keyframes confirmPop { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-
-  /* Loading spinner */
-  .checkout-spinner { width: 40px; height: 40px; border: 3px solid #333; border-top-color: #E50914; border-radius: 50%; animation: spin .6s linear infinite; margin-bottom: 16px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ===== PRODUCT LIST (Netflix Season/Episodes Style) ===== */
-  .shop-list-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 40; opacity: 0; pointer-events: none; transition: opacity .3s; }
-  .shop-list-overlay.open { opacity: 1; pointer-events: auto; }
-
-  .shop-list { position: absolute; top: 0; right: 0; bottom: 0; width: clamp(400px, 40vw, 560px); background: #1a1a1a; z-index: 41; transform: translateX(100%); transition: transform .4s cubic-bezier(.22,1,.36,1); display: flex; flex-direction: column; overflow-y: auto; box-shadow: -4px 0 30px rgba(0,0,0,.7); }
-  .shop-list.open { transform: translateX(0); }
-
-  .shop-list-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid #2e2e2e; flex-shrink: 0; background: #222; }
-  .shop-list-header h2 { font-size: 20px; font-weight: 700; color: #fff; }
-  .shop-list-close { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; border: none; background: none; color: #fff; font-size: 22px; transition: background .15s; }
-  .shop-list-close:hover { background: rgba(255,255,255,.1); }
-
-  /* Product item — collapsed */
-  .pl-item { border-bottom: 1px solid #2e2e2e; cursor: pointer; transition: background .15s; }
-  .pl-item:hover { background: rgba(255,255,255,.04); }
-
-  .pl-row { display: flex; align-items: center; padding: 20px 24px; gap: 18px; }
-  .pl-number { width: 36px; flex-shrink: 0; font-size: 18px; font-weight: 700; color: #f2f2f2; }
-  .pl-info { flex: 1; min-width: 0; }
-  .pl-name { font-size: 17px; font-weight: 700; color: #f5f5f5; line-height: 1.2; }
-  .pl-price-small { font-size: 13px; color: #999; margin-top: 2px; }
-  .pl-chevron { width: 24px; height: 24px; flex-shrink: 0; fill: #999; transition: transform .25s; }
-  .pl-item.expanded .pl-chevron { transform: rotate(180deg); }
-
-  /* Product item — expanded detail */
-  .pl-detail { max-height: 0; overflow: hidden; transition: max-height .35s cubic-bezier(.22,1,.36,1); background: #0f0f0f; }
-  .pl-item.expanded .pl-detail { max-height: 500px; }
-
-  .pl-detail-inner { display: flex; gap: 24px; padding: 4px 24px 24px; align-items: flex-start; }
-  .pl-thumb { width: 200px; aspect-ratio: 1/1; object-fit: cover; flex-shrink: 0; background: #2a2a2a; border-radius: 6px; }
-  .pl-detail-content { flex: 1; min-width: 0; padding-top: 2px; }
-  .pl-desc { font-size: 14px; line-height: 1.5; color: #bbb; margin-bottom: 14px; }
-  .pl-price-big { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; }
-  .pl-official { font-size: 11px; color: #46d369; font-weight: 600; margin-bottom: 16px; }
-  .pl-buy-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #E50914; color: #fff; font-size: 14px; font-weight: 700; border: none; border-radius: 4px; cursor: pointer; transition: background .15s; }
-  .pl-buy-btn:hover { background: #f40612; }
-  .pl-buy-btn svg { width: 18px; height: 18px; fill: currentColor; }
-
-  /* Shop button in control bar */
-  .nf-shop-btn { position: relative; }
-  .nf-shop-btn .nf-shop-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background: #E50914; border-radius: 50%; animation: livePulse 1.5s ease-in-out infinite; }
-
-  /* Mobile responsive */
-  @media (max-width: 600px) {
-    .shop-drawer { width: 100%; }
-    .shop-list { width: 100%; }
-    .nf-card { right: 8px; bottom: 80px; width: clamp(180px, 55vw, 260px); }
-    .pl-detail-inner { flex-direction: column; }
-    .pl-thumb { width: 100%; }
-    .pl-row { padding: 16px 16px; }
-    .pl-detail-inner { padding: 4px 16px 20px; }
-  }
+/* ─── Responsive ───────────────────────────────── */
+@media(max-width:768px){
+  .scenario-grid{grid-template-columns:repeat(2,1fr)}
+  .info-grid{grid-template-columns:1fr}
+  .hero-stats{gap:20px}
+}
+@media(max-width:600px){
+  .shop-drawer{width:100%}
+  .shop-list{width:100%}
+  .nf-card{right:8px;bottom:80px;width:clamp(180px,55vw,260px)}
+  .pl-detail-inner{flex-direction:column}
+  .pl-thumb{width:100%}
+  .pl-row{padding:16px 16px}
+  .pl-detail-inner{padding:4px 16px 20px}
+}
 </style>
 </head>
 <body>
 
-<div class="wrapper">
-  <div class="nf-player" id="player">
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-badge"><span class="pulse"></span> Interactive Prototype — March 21 Concept</div>
+  <h1>
+    <span class="stream">STREAM</span><span class="shop">SHOP</span>
+    <span class="times">×</span>
+    <span class="bts">BTS</span>
+  </h1>
+  <p class="hero-sub">
+    30–50 million fans watching BTS live on Netflix on March 21, 2026. Every one of them wants to buy merch.
+    StreamShop surfaces official Weverse products at the exact right moment — without ever leaving the concert.
+  </p>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">30–50M</div><div class="stat-label">Projected Viewers</div></div>
+    <div class="stat"><div class="stat-num">$1,422</div><div class="stat-label">Avg ARMY Merch Spend</div></div>
+    <div class="stat"><div class="stat-num">$4.9B</div><div class="stat-label">Annual Economic Impact</div></div>
+    <div class="stat"><div class="stat-num">&lt;15s</div><div class="stat-label">Purchase Time</div></div>
+  </div>
+</div>
 
-    <!-- Video background -->
-    <div id="stage" style="position:absolute;inset:0;overflow:hidden;background:#000">
-      <div id="ytContainer" style="position:absolute;top:50%;left:50%;width:180%;height:180%;transform:translate(-50%,-50%);pointer-events:none"></div>
+<!-- Scenario Selector -->
+<div class="scenarios">
+  <div class="scenario-grid">
+    <div class="scenario-btn active" onclick="loadScenario(0)">
+      <div class="scenario-emoji">💜</div>
+      <div class="scenario-title">Opening — Dynamite</div>
+      <div class="scenario-desc">Peak energy moment</div>
     </div>
-
-    <!-- Big play/pause indicator -->
-    <div class="nf-big-play" id="bigPlay">
-      <svg id="bigPlayIcon" viewBox="0 0 24 24"><path d="M6 4l15 8-15 8V4z"/></svg>
+    <div class="scenario-btn" onclick="loadScenario(1)">
+      <div class="scenario-emoji">💿</div>
+      <div class="scenario-title">ARIRANG First Live</div>
+      <div class="scenario-desc">New album debut</div>
     </div>
-
-    <!-- Netflix top bar -->
-    <div class="nf-title-bar">
-      <div class="nf-n-logo">N</div>
-      <div>
-        <div class="nf-episode-title">BTS: THE COMEBACK LIVE</div>
-        <div class="nf-episode-sub" id="songInfo">Dynamite</div>
-      </div>
-      <div class="nf-live-badge">
-        <div class="nf-live-dot"></div>
-        <div class="nf-live-text">LIVE</div>
-      </div>
+    <div class="scenario-btn" onclick="loadScenario(2)">
+      <div class="scenario-emoji">🥹</div>
+      <div class="scenario-title">Reunion Encore</div>
+      <div class="scenario-desc">Emotional peak</div>
     </div>
-
-    <!-- Product card overlay (Netflix style) -->
-    <div id="productCard" class="nf-card">
-      <div class="nf-card-img-wrap">
-        <img id="cardImg" class="nf-card-img" src="https://cdn-contents.weverseshop.io/public/shop/2c24d6dc2dda4ab6ceaef14b53985a03.png?w=720&q=95" alt="Product">
-        <div class="nf-card-badge">SHOP THIS MOMENT</div>
-      </div>
-      <div class="nf-card-body">
-        <div class="nf-card-name" id="cardName">BTS LIGHT STICK VER.4</div>
-        <div class="nf-card-desc" id="cardDesc">Syncs with concert in real-time</div>
-        <div class="nf-card-row">
-          <span class="nf-card-price" id="cardPrice">$35.05</span>
-          <span class="nf-card-official">&#10003; Official</span>
-        </div>
-        <div class="nf-card-buy" id="buyBtn">Buy Now &#8594;</div>
-        <div class="nf-card-dismiss" id="dismissBtn">Dismiss</div>
-      </div>
+    <div class="scenario-btn" onclick="loadScenario(3)">
+      <div class="scenario-emoji">🏎️</div>
+      <div class="scenario-title">F1: Drive to Survive</div>
+      <div class="scenario-desc">Sports merchandise</div>
     </div>
+  </div>
+</div>
 
-    <!-- Product List (Netflix Season Style) -->
-    <div class="shop-list-overlay" id="shopListOverlay"></div>
-    <div class="shop-list" id="shopList">
-      <div class="shop-list-header">
-        <h2>Available Products</h2>
-        <button class="shop-list-close" id="shopListClose">&times;</button>
+<!-- Player -->
+<div class="player-section">
+  <div class="player-frame" id="playerFrame">
+
+    <!-- Fullscreen toggle (page-level) -->
+    <button class="fs-toggle-btn" id="fullscreenToggle" onclick="toggleFullscreen()" title="Full Screen">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path id="fsIcon" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+      <span id="fsLabel">Full Screen</span>
+    </button>
+
+    <!-- Netflix-style player -->
+    <div class="nf-player" id="player">
+
+      <!-- Video background -->
+      <div id="stage" style="position:absolute;inset:0;overflow:hidden;background:#000">
+        <div id="ytContainer" style="position:absolute;top:50%;left:50%;width:180%;height:180%;transform:translate(-50%,-50%);pointer-events:none"></div>
       </div>
-      <div id="shopListItems"></div>
-    </div>
 
-    <!-- Shop Drawer Overlay -->
-    <div class="shop-overlay" id="shopOverlay"></div>
-
-    <!-- Shop Drawer -->
-    <div class="shop-drawer" id="shopDrawer">
-      <div class="drawer-header">
-        <h2 id="drawerTitle">Quick View</h2>
-        <button class="drawer-close" id="drawerClose">&times;</button>
+      <!-- Big play/pause indicator -->
+      <div class="nf-big-play" id="bigPlay">
+        <svg id="bigPlayIcon" viewBox="0 0 24 24"><path d="M6 4l15 8-15 8V4z"/></svg>
       </div>
 
-      <!-- PRODUCT VIEW -->
-      <div class="drawer-product" id="drawerProduct">
-        <div class="drawer-img-carousel">
-          <img id="drawerImg" src="" alt="Product">
-        </div>
-        <div class="drawer-product-name" id="drawerName"></div>
-        <div class="drawer-product-desc" id="drawerDesc">Premium quality official merchandise. Limited edition, exclusively available during this live event.</div>
+      <!-- Netflix top bar -->
+      <div class="nf-title-bar">
+        <div class="nf-n-logo">N</div>
         <div>
-          <span class="drawer-product-price" id="drawerPrice"></span>
-          <span class="drawer-official-badge">&#10003; Official BTS Merch</span>
+          <div class="nf-episode-title">BTS: THE COMEBACK LIVE</div>
+          <div class="nf-episode-sub" id="songInfo">Dynamite</div>
         </div>
-
-        <div style="margin-top:20px">
-          <div class="drawer-option-label">Size</div>
-          <div class="drawer-sizes" id="drawerSizes">
-            <div class="size-btn" data-size="S">S</div>
-            <div class="size-btn" data-size="M">M</div>
-            <div class="size-btn selected" data-size="L">L</div>
-            <div class="size-btn" data-size="XL">XL</div>
-          </div>
+        <div class="nf-live-badge">
+          <div class="nf-live-dot"></div>
+          <div class="nf-live-text">LIVE</div>
         </div>
-
-        <div>
-          <div class="drawer-option-label">Quantity</div>
-          <div class="drawer-qty">
-            <div class="qty-btn" id="qtyMinus">&#8722;</div>
-            <div class="qty-val" id="qtyVal">1</div>
-            <div class="qty-btn" id="qtyPlus">&#43;</div>
-          </div>
-        </div>
-
-        <button class="drawer-add-btn" id="addToBagBtn">Add to Bag</button>
       </div>
 
-      <!-- CHECKOUT VIEW -->
-      <div class="drawer-checkout" id="drawerCheckout">
-        <div class="checkout-summary">
-          <img id="checkoutImg" src="" alt="">
-          <div class="checkout-summary-info">
-            <div class="checkout-summary-name" id="checkoutName"></div>
-            <div class="checkout-summary-meta" id="checkoutMeta">Size: L &middot; Qty: 1</div>
-            <div class="checkout-summary-price" id="checkoutPrice"></div>
+      <!-- Product card overlay (Netflix style) -->
+      <div id="productCard" class="nf-card">
+        <div class="nf-card-img-wrap">
+          <img id="cardImg" class="nf-card-img" src="https://cdn-contents.weverseshop.io/public/shop/2c24d6dc2dda4ab6ceaef14b53985a03.png?w=720&q=95" alt="Product">
+          <div class="nf-card-badge">SHOP THIS MOMENT</div>
+        </div>
+        <div class="nf-card-body">
+          <div class="nf-card-name" id="cardName">BTS LIGHT STICK VER.4</div>
+          <div class="nf-card-desc" id="cardDesc">Syncs with concert in real-time</div>
+          <div class="nf-card-row">
+            <span class="nf-card-price" id="cardPrice">$35.05</span>
+            <span class="nf-card-official">&#10003; Official</span>
           </div>
+          <div class="nf-card-buy" id="buyBtn">Buy Now &#8594;</div>
+          <div class="nf-card-dismiss" id="dismissBtn">Dismiss</div>
+        </div>
+      </div>
+
+      <!-- Product List (Netflix Season Style) -->
+      <div class="shop-list-overlay" id="shopListOverlay"></div>
+      <div class="shop-list" id="shopList">
+        <div class="shop-list-header">
+          <h2>Available Products</h2>
+          <button class="shop-list-close" id="shopListClose">&times;</button>
+        </div>
+        <div id="shopListItems"></div>
+      </div>
+
+      <!-- Shop Drawer Overlay -->
+      <div class="shop-overlay" id="shopOverlay"></div>
+
+      <!-- Shop Drawer -->
+      <div class="shop-drawer" id="shopDrawer">
+        <div class="drawer-header">
+          <h2 id="drawerTitle">Quick View</h2>
+          <button class="drawer-close" id="drawerClose">&times;</button>
         </div>
 
-        <div class="checkout-section">
-          <div class="checkout-section-title">Payment</div>
-          <div class="checkout-card">
-            <div class="checkout-card-icon">💳</div>
-            <div class="checkout-card-info">
-              <div class="checkout-card-label">Visa &bull;&bull;&bull;&bull; 4242</div>
-              <div class="checkout-card-sub">Netflix subscription card</div>
+        <!-- PRODUCT VIEW -->
+        <div class="drawer-product" id="drawerProduct">
+          <div class="drawer-img-carousel">
+            <img id="drawerImg" src="" alt="Product">
+          </div>
+          <div class="drawer-product-name" id="drawerName"></div>
+          <div class="drawer-product-desc" id="drawerDesc">Premium quality official merchandise. Limited edition, exclusively available during this live event.</div>
+          <div>
+            <span class="drawer-product-price" id="drawerPrice"></span>
+            <span class="drawer-official-badge">&#10003; Official BTS Merch</span>
+          </div>
+
+          <div style="margin-top:20px">
+            <div class="drawer-option-label">Size</div>
+            <div class="drawer-sizes" id="drawerSizes">
+              <div class="size-btn" data-size="S">S</div>
+              <div class="size-btn" data-size="M">M</div>
+              <div class="size-btn selected" data-size="L">L</div>
+              <div class="size-btn" data-size="XL">XL</div>
             </div>
-            <div class="checkout-card-check">&#10003;</div>
           </div>
+
+          <div>
+            <div class="drawer-option-label">Quantity</div>
+            <div class="drawer-qty">
+              <div class="qty-btn" id="qtyMinus">&#8722;</div>
+              <div class="qty-val" id="qtyVal">1</div>
+              <div class="qty-btn" id="qtyPlus">&#43;</div>
+            </div>
+          </div>
+
+          <button class="drawer-add-btn" id="addToBagBtn">Add to Bag</button>
         </div>
 
-        <div class="checkout-section">
-          <div class="checkout-section-title">Shipping Address</div>
-          <input class="checkout-input" id="shippingName" placeholder="Full name" value="Kim Namjoon">
-          <input class="checkout-input" id="shippingAddr" placeholder="Address" value="42 Hannam-daero, Yongsan-gu">
-          <div class="checkout-row">
-            <input class="checkout-input" id="shippingCity" placeholder="City" value="Seoul">
-            <input class="checkout-input" id="shippingZip" placeholder="Zip" value="04410">
+        <!-- CHECKOUT VIEW -->
+        <div class="drawer-checkout" id="drawerCheckout">
+          <div class="checkout-summary">
+            <img id="checkoutImg" src="" alt="">
+            <div class="checkout-summary-info">
+              <div class="checkout-summary-name" id="checkoutName"></div>
+              <div class="checkout-summary-meta" id="checkoutMeta">Size: L &middot; Qty: 1</div>
+              <div class="checkout-summary-price" id="checkoutPrice"></div>
+            </div>
           </div>
-          <input class="checkout-input" id="shippingCountry" placeholder="Country" value="South Korea">
+
+          <div class="checkout-section">
+            <div class="checkout-section-title">Payment</div>
+            <div class="checkout-card">
+              <div class="checkout-card-icon">💳</div>
+              <div class="checkout-card-info">
+                <div class="checkout-card-label">Visa &bull;&bull;&bull;&bull; 4242</div>
+                <div class="checkout-card-sub">Netflix subscription card</div>
+              </div>
+              <div class="checkout-card-check">&#10003;</div>
+            </div>
+          </div>
+
+          <div class="checkout-section">
+            <div class="checkout-section-title">Shipping Address</div>
+            <input class="checkout-input" id="shippingName" placeholder="Full name" value="Kim Namjoon">
+            <input class="checkout-input" id="shippingAddr" placeholder="Address" value="42 Hannam-daero, Yongsan-gu">
+            <div class="checkout-row">
+              <input class="checkout-input" id="shippingCity" placeholder="City" value="Seoul">
+              <input class="checkout-input" id="shippingZip" placeholder="Zip" value="04410">
+            </div>
+            <input class="checkout-input" id="shippingCountry" placeholder="Country" value="South Korea">
+          </div>
+
+          <button class="checkout-buy-btn" id="checkoutBuyBtn">Buy Now</button>
         </div>
 
-        <button class="checkout-buy-btn" id="checkoutBuyBtn">Buy Now</button>
+        <!-- CONFIRMATION VIEW -->
+        <div class="drawer-confirm" id="drawerConfirm"></div>
       </div>
 
-      <!-- CONFIRMATION VIEW -->
-      <div class="drawer-confirm" id="drawerConfirm"></div>
+      <!-- Netflix bottom controls -->
+      <div class="nf-controls" id="controls">
+        <div class="nf-gradient"></div>
+        <div style="position:relative;z-index:2">
+          <div class="nf-scrubber" id="scrubber">
+            <div class="nf-scrubber-track">
+              <div class="nf-scrubber-fill" id="progress">
+                <div class="nf-scrubber-knob"></div>
+              </div>
+            </div>
+          </div>
+          <div class="nf-bar">
+            <div class="nf-bar-left">
+              <div class="nf-btn" id="playPauseBtn" title="Play">
+                <svg id="ppIcon" viewBox="0 0 24 24"><path d="M6 4l15 8-15 8V4z"/></svg>
+              </div>
+              <div class="nf-btn" id="backBtn" title="Back 10s">
+                <svg viewBox="0 0 24 24"><path d="M12.5 3C7.26 3 3 7.26 3 12.5S7.26 22 12.5 22 22 17.74 22 12.5h-2c0 4.14-3.36 7.5-7.5 7.5S5 16.64 5 12.5 8.36 5 12.5 5V3z"/><text x="9" y="16" font-size="8" fill="#fff" font-weight="700">10</text></svg>
+              </div>
+              <div class="nf-btn" id="fwdBtn" title="Forward 10s">
+                <svg viewBox="0 0 24 24"><path d="M11.5 3v2c4.14 0 7.5 3.36 7.5 7.5S15.64 20 11.5 20 4 16.64 4 12.5H2C2 17.74 6.26 22 11.5 22S21 17.74 21 12.5 16.74 3 11.5 3z"/><text x="8" y="16" font-size="8" fill="#fff" font-weight="700">10</text></svg>
+              </div>
+              <div class="nf-volume-wrap">
+                <div class="nf-btn" id="muteBtn" title="Volume">
+                  <svg id="volIcon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path id="volWave" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                </div>
+                <div class="nf-volume-slider-wrap">
+                  <input type="range" class="nf-volume-slider" id="volSlider" min="0" max="100" value="0">
+                </div>
+              </div>
+              <span class="nf-time" id="timeDisplay">0:00</span>
+            </div>
+            <div class="nf-bar-center"></div>
+            <div class="nf-bar-right">
+              <div class="nf-btn nf-shop-btn" id="shopBtn" title="Shop">
+                <div class="nf-shop-dot"></div>
+                <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 6.66l.86 1.84H18l1.1-2H7.16zM5.16 4l-.96-2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7l1.1-2h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0020.01 4H5.16z"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /nf-player -->
+
+  </div>
+</div>
+
+<!-- Info Cards -->
+<div class="info-section">
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-icon">🛡️</div>
+      <div class="info-title">Official Store Only</div>
+      <div class="info-text">Every product links directly to Weverse Shop. No third-party sellers. Every sale counts toward official numbers.</div>
+      <div class="info-stat">100%</div>
     </div>
+    <div class="info-card">
+      <div class="info-icon">⚡</div>
+      <div class="info-title">Under 15 Seconds</div>
+      <div class="info-text">See it → tap → checkout. Shop Pay, Apple Pay, Google Pay. The concert never stops playing.</div>
+      <div class="info-stat">&lt;15s</div>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">📊</div>
+      <div class="info-title">Full Attribution</div>
+      <div class="info-text">Track every impression, click, and purchase. Per song. Per product. Per moment. Prove which moments drive sales.</div>
+      <div class="info-stat">7.4%</div>
+    </div>
+  </div>
+</div>
 
-    <!-- Netflix bottom controls -->
-    <div class="nf-controls" id="controls">
-      <div class="nf-gradient"></div>
-      <div style="position:relative;z-index:2">
-        <div class="nf-scrubber" id="scrubber">
-          <div class="nf-scrubber-track">
-            <div class="nf-scrubber-fill" id="progress">
-              <div class="nf-scrubber-knob"></div>
-            </div>
-          </div>
-        </div>
-        <div class="nf-bar">
-          <div class="nf-bar-left">
-            <!-- Play/Pause -->
-            <div class="nf-btn" id="playPauseBtn" title="Play">
-              <svg id="ppIcon" viewBox="0 0 24 24"><path d="M6 4l15 8-15 8V4z"/></svg>
-            </div>
-            <!-- Back 10s -->
-            <div class="nf-btn" id="backBtn" title="Back 10s">
-              <svg viewBox="0 0 24 24"><path d="M12.5 3C7.26 3 3 7.26 3 12.5S7.26 22 12.5 22 22 17.74 22 12.5h-2c0 4.14-3.36 7.5-7.5 7.5S5 16.64 5 12.5 8.36 5 12.5 5V3z"/><text x="9" y="16" font-size="8" fill="#fff" font-weight="700">10</text></svg>
-            </div>
-            <!-- Forward 10s -->
-            <div class="nf-btn" id="fwdBtn" title="Forward 10s">
-              <svg viewBox="0 0 24 24"><path d="M11.5 3v2c4.14 0 7.5 3.36 7.5 7.5S15.64 20 11.5 20 4 16.64 4 12.5H2C2 17.74 6.26 22 11.5 22S21 17.74 21 12.5 16.74 3 11.5 3z"/><text x="8" y="16" font-size="8" fill="#fff" font-weight="700">10</text></svg>
-            </div>
-            <!-- Volume -->
-            <div class="nf-volume-wrap">
-              <div class="nf-btn" id="muteBtn" title="Volume">
-                <svg id="volIcon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path id="volWave" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-              </div>
-              <div class="nf-volume-slider-wrap">
-                <input type="range" class="nf-volume-slider" id="volSlider" min="0" max="100" value="0">
-              </div>
-            </div>
-            <span class="nf-time" id="timeDisplay">0:00</span>
-          </div>
-          <div class="nf-bar-center"></div>
-          <div class="nf-bar-right">
-            <!-- Shop -->
-            <div class="nf-btn nf-shop-btn" id="shopBtn" title="Shop">
-              <div class="nf-shop-dot"></div>
-              <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 6.66l.86 1.84H18l1.1-2H7.16zM5.16 4l-.96-2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7l1.1-2h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0020.01 4H5.16z"/></svg>
-            </div>
-            <!-- Fullscreen -->
-            <div class="nf-btn" id="fsBtn" title="Fullscreen">
-              <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-            </div>
-          </div>
-        </div>
+<!-- CTA -->
+<div class="cta-section">
+  <div class="cta-title">30–50M viewers. One live moment. Zero commerce infrastructure.</div>
+  <div class="cta-sub">StreamShop is the missing layer between streaming content and official merchandise.</div>
+  <a class="cta-btn" href="mailto:YOUR_EMAIL_HERE">Get in touch →</a>
+</div>
+
+<!-- How It Works (for HN visitors) -->
+<div class="info-section" style="padding-top:0">
+  <div style="max-width:740px;margin:0 auto;padding:0 20px 40px;text-align:left">
+    <h3 style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:16px;text-align:center">How StreamShop Works</h3>
+    <p style="font-size:14px;color:var(--dim);line-height:1.8;margin-bottom:16px">
+      StreamShop is commerce middleware for streaming platforms. It maps timestamps in live or pre-recorded content to products from official merchant stores. During natural breaks in the content (VCR interludes, pre-encore gaps — never during performances), the overlay surfaces relevant products. Viewers scan a QR code (TV) or tap a button (phone) and complete checkout on the merchant's own store. StreamShop never handles payments.
+    </p>
+    <p style="font-size:14px;color:var(--dim);line-height:1.8;margin-bottom:16px">
+      <strong style="color:var(--text)">The problem:</strong> Netflix generates massive cultural moments but captures $0 in real-time merchandise revenue. Squid Game merch was 2 weeks late. KPop Demon Hunters merch won't arrive until a year after peak demand. Disney's Eras Tour film had 4.6M views and $0 in-stream merch sales. Amazon proved the model works (Shop the Show across 1,300+ titles, 89% of viewers search for products same day) — but only for products sold on Amazon.com.
+    </p>
+    <p style="font-size:14px;color:var(--dim);line-height:1.8;margin-bottom:24px">
+      <strong style="color:var(--text)">Why BTS:</strong> On March 21, 2026, BTS performs their first concert in 3+ years, live on Netflix to 300M+ subscribers globally. ARMY (BTS fans) spend $1,422/year on merch and run the most sophisticated buying campaigns in consumer culture — coordinated chart tracking via Hanteo and Circle, country-by-country group orders. The products exist on Weverse Shop. The store exists. There's no purchase path during the stream. StreamShop is the bridge.
+    </p>
+    <div style="padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:24px">
+      <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;font-weight:600">Tech Stack</div>
+      <p style="font-size:13px;color:var(--dim);line-height:1.7;font-family:var(--mono)">
+        Node.js/TypeScript + Express · PostgreSQL + Prisma ORM · Shopify Storefront GraphQL API · Chrome Extension (Manifest V3) · Timestamp-to-product mapping · QR code TV-to-phone handoff
+      </p>
+    </div>
+    <div style="text-align:center">
+      <a href="mailto:YOUR_EMAIL_HERE" style="color:var(--purple);font-size:14px;text-decoration:none;font-weight:600">YOUR_EMAIL_HERE</a>
+      <span style="color:var(--muted);margin:0 12px">·</span>
+      <span style="color:var(--dim);font-size:13px">Built by [YOUR NAME]</span>
+    </div>
+  </div>
+</div>
+
+<!-- Disclaimer — Prominent -->
+<div style="max-width:740px;margin:0 auto;padding:20px 20px 60px;text-align:center">
+  <div style="padding:16px 24px;background:rgba(245,200,66,0.06);border:1px solid rgba(245,200,66,0.15);border-radius:var(--radius-sm)">
+    <p style="font-size:12px;color:var(--muted);line-height:1.7">
+      <strong style="color:var(--gold)">Disclaimer:</strong> StreamShop is an independent technology prototype. It is <strong style="color:var(--dim)">not affiliated with, endorsed by, or connected to BTS, HYBE, Weverse, Netflix, or any of their subsidiaries.</strong> Product names, prices, and images are used for demonstration purposes only. All purchases route to official merchant stores — StreamShop does not sell products or handle payments. This demo uses publicly available product information from Weverse Shop.
+    </p>
+  </div>
+</div>
+
+<!-- Checkout Modal (page-level) -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-top">
+      <div class="modal-check">✓</div>
+      <div class="modal-title">Added to Weverse Cart</div>
+      <div class="modal-sub">Ready for checkout — all official, all counted 💜</div>
+    </div>
+    <div class="modal-product" id="modalProduct">
+      <div class="modal-thumb" id="modalThumb">💿</div>
+      <div class="modal-pinfo">
+        <div class="modal-pname" id="modalName">ARIRANG Album</div>
+        <div class="modal-pprice" id="modalPrice">$24.90</div>
       </div>
+    </div>
+    <div class="modal-details">
+      <div class="modal-detail-row"><span class="modal-detail-label">Store</span><span class="modal-detail-value" id="modalStore">Weverse Shop Official</span></div>
+      <div class="modal-detail-row"><span class="modal-detail-label">Checkout</span><span class="modal-detail-value">Weverse · Apple Pay · Shop Pay</span></div>
+      <div class="modal-detail-row"><span class="modal-detail-label">Ships from</span><span class="modal-detail-value">South Korea (Global shipping)</span></div>
+      <div class="modal-detail-row"><span class="modal-detail-label">Counts toward</span><span class="modal-detail-value" style="color:var(--green)">✓ Hanteo · ✓ Circle · ✓ Billboard</span></div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal()">Continue watching</button>
+      <button class="modal-btn primary" onclick="closeModal()">Open Weverse Checkout →</button>
     </div>
   </div>
 </div>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
+// ===== SCENARIO SELECTOR =====
+let currentScenario = 0;
+
+function loadScenario(idx) {
+  currentScenario = idx;
+  document.querySelectorAll('.scenario-btn').forEach((b,i) => {
+    b.classList.toggle('active', i === idx);
+  });
+
+  if (idx === 3) {
+    document.documentElement.style.setProperty('--purple', '#E63946');
+    document.documentElement.style.setProperty('--purple-glow', 'rgba(230,57,70,0.35)');
+    document.documentElement.style.setProperty('--purple-dim', 'rgba(230,57,70,0.12)');
+    document.documentElement.style.setProperty('--violet', '#FF6B6B');
+    document.documentElement.style.setProperty('--pink', '#FF8A5C');
+  } else {
+    document.documentElement.style.setProperty('--purple', '#7B2D8E');
+    document.documentElement.style.setProperty('--purple-glow', 'rgba(123,45,142,0.35)');
+    document.documentElement.style.setProperty('--purple-dim', 'rgba(123,45,142,0.12)');
+    document.documentElement.style.setProperty('--violet', '#9333EA');
+    document.documentElement.style.setProperty('--pink', '#EC4899');
+  }
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+
+// ===== FULLSCREEN TOGGLE =====
+function toggleFullscreen() {
+  const frame = document.getElementById('playerFrame');
+  const icon = document.getElementById('fsIcon');
+  const label = document.getElementById('fsLabel');
+
+  if (!document.fullscreenElement) {
+    frame.requestFullscreen().then(() => {
+      icon.setAttribute('d', 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z');
+      label.textContent = 'Exit Full Screen';
+    }).catch(() => {});
+  } else {
+    document.exitFullscreen().then(() => {
+      icon.setAttribute('d', 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z');
+      label.textContent = 'Full Screen';
+    }).catch(() => {});
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  const icon = document.getElementById('fsIcon');
+  const label = document.getElementById('fsLabel');
+  if (!document.fullscreenElement) {
+    icon.setAttribute('d', 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z');
+    label.textContent = 'Full Screen';
+  }
+});
+
 // ===== YOUTUBE BACKGROUND =====
 let ytPlayer = null;
 let isMuted = true;
@@ -515,21 +790,11 @@ volSlider.addEventListener('input', function(e) {
   }
 });
 
-// ===== FULLSCREEN =====
-document.getElementById('fsBtn').addEventListener('click', function(e) {
-  e.stopPropagation();
-  if (!document.fullscreenElement) {
-    playerEl.requestFullscreen();
-  } else {
-    document.exitFullscreen();
-  }
-});
-
 // ===== KEYBOARD SHORTCUTS =====
 document.addEventListener('keydown', function(e) {
   if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
   if (e.code === 'KeyM') { document.getElementById('muteBtn').click(); }
-  if (e.code === 'KeyF') { document.getElementById('fsBtn').click(); }
+  if (e.code === 'KeyF') { toggleFullscreen(); }
   if (e.code === 'ArrowLeft' && ytPlayer) { ytPlayer.seekTo(Math.max(0, ytPlayer.getCurrentTime() - 10), true); }
   if (e.code === 'ArrowRight' && ytPlayer) { ytPlayer.seekTo(ytPlayer.getCurrentTime() + 10, true); }
 });
@@ -557,7 +822,7 @@ const cardDesc = document.getElementById('cardDesc');
 const cardPrice = document.getElementById('cardPrice');
 const songInfoEl = document.getElementById('songInfo');
 const progress = document.getElementById('progress');
-const timeDisplay = document.getElementById('timeDisplay');
+const nfTimeDisplay = document.getElementById('timeDisplay');
 const dismissBtn = document.getElementById('dismissBtn');
 const buyBtn = document.getElementById('buyBtn');
 
@@ -639,7 +904,6 @@ document.getElementById('addToBagBtn').addEventListener('click', () => {
   drawerProduct.style.display = 'none';
   drawerCheckout.classList.add('active');
   drawerTitle.textContent = 'Checkout';
-  // Populate checkout summary
   document.getElementById('checkoutImg').src = currentProduct.img;
   document.getElementById('checkoutName').textContent = currentProduct.name;
   document.getElementById('checkoutMeta').textContent = 'Size: ' + selectedSize + ' \u00b7 Qty: ' + qty;
@@ -654,21 +918,18 @@ document.getElementById('checkoutBuyBtn').addEventListener('click', () => {
   drawerCheckout.classList.remove('active');
   drawerConfirm.classList.add('active');
   drawerTitle.textContent = 'Order';
-  // Loading state
   drawerConfirm.innerHTML = '<div class="checkout-spinner"></div><div style="color:#999;font-size:13px">Processing payment...</div>';
   setTimeout(() => {
-    // Show confirmation
     drawerConfirm.innerHTML = '<div class="confirm-check"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></div><div class="confirm-title">Order Confirmed!</div><div class="confirm-sub">Check your email for receipt &amp; tracking info.</div>';
-    // Auto-close after 3s
     setTimeout(closeDrawer, 3000);
   }, 1200);
 });
 
 // Escape key closes drawer
 document.addEventListener('keydown', function(e) {
-  if (e.code === 'Escape' && shopDrawer.classList.contains('open')) {
-    e.preventDefault();
-    closeDrawer();
+  if (e.code === 'Escape') {
+    if (shopDrawer.classList.contains('open')) { e.preventDefault(); closeDrawer(); }
+    else if (shopList.classList.contains('open')) { closeShopList(); }
   }
 });
 
@@ -702,7 +963,7 @@ setInterval(() => {
   progress.style.width = (elapsed / totalTime * 100) + '%';
   const m = Math.floor(elapsed / 60);
   const s = Math.floor(elapsed % 60);
-  timeDisplay.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  nfTimeDisplay.textContent = m + ':' + (s < 10 ? '0' : '') + s;
   updateSong();
   for (const p of products) {
     if (Math.abs(elapsed - p.time) < 0.6 && !cardVisible && !dismissed) {
@@ -716,7 +977,6 @@ const shopList = document.getElementById('shopList');
 const shopListOverlay = document.getElementById('shopListOverlay');
 const shopListItems = document.getElementById('shopListItems');
 
-// Build product list items
 products.forEach((p, i) => {
   const item = document.createElement('div');
   item.className = i === 0 ? 'pl-item expanded' : 'pl-item';
@@ -734,16 +994,12 @@ products.forEach((p, i) => {
     + '<button class="pl-buy-btn" data-index="' + i + '"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 6.66l.86 1.84H18l1.1-2H7.16zM5.16 4l-.96-2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7l1.1-2h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0020.01 4H5.16z"/></svg> Buy Now</button>'
     + '</div></div></div>';
 
-  // Toggle expand/collapse on row click
   item.querySelector('.pl-row').addEventListener('click', () => {
     const wasExpanded = item.classList.contains('expanded');
-    // Collapse all
     document.querySelectorAll('.pl-item').forEach(el => el.classList.remove('expanded'));
-    // Expand this one (if it wasn't already open)
     if (!wasExpanded) item.classList.add('expanded');
   });
 
-  // Buy button → open drawer
   item.querySelector('.pl-buy-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     closeShopList();
@@ -774,20 +1030,16 @@ document.getElementById('shopBtn').addEventListener('click', (e) => {
 document.getElementById('shopListClose').addEventListener('click', closeShopList);
 shopListOverlay.addEventListener('click', closeShopList);
 
-// Escape closes list
-document.addEventListener('keydown', function(e) {
-  if (e.code === 'Escape' && shopList.classList.contains('open') && !shopDrawer.classList.contains('open')) {
-    closeShopList();
-  }
-});
-
-// Clicking the notification card also opens list
+// Clicking the notification card opens list
 card.addEventListener('click', (e) => {
   if (e.target.closest('#buyBtn') || e.target.closest('#dismissBtn')) return;
   card.classList.remove('visible');
   cardVisible = false;
   openShopList();
 });
+
+// Init scenario
+loadScenario(0);
 </script>
 
 </body>
